@@ -14,7 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChecklistEditor } from "./ChecklistEditor";
 import { useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
+import { useProjects } from "@/hooks/useProjects";
 import type { Task } from "@/types/entities";
+
+const selectClass =
+  "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 interface TaskEditDialogProps {
   task: Task | null;
@@ -29,11 +33,13 @@ export function TaskEditDialog({
 }: TaskEditDialogProps) {
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
+  const { data: projects = [] } = useProjects();
 
   const [title, setTitle] = useState("");
   const [planDate, setPlanDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [isKey, setIsKey] = useState(0);
+  const [projectId, setProjectId] = useState("");
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -42,6 +48,7 @@ export function TaskEditDialog({
       setPlanDate(task.plan_date ?? "");
       setDueDate(task.due_date ?? "");
       setIsKey(task.is_key);
+      setProjectId(task.project_id?.toString() ?? "");
       setNotes(task.notes ?? "");
     }
   }, [task]);
@@ -55,6 +62,7 @@ export function TaskEditDialog({
         plan_date: planDate || null,
         due_date: dueDate || null,
         is_key: isKey,
+        project_id: projectId ? Number(projectId) : null,
         notes: notes || null,
       },
     });
@@ -106,6 +114,23 @@ export function TaskEditDialog({
                 onChange={(e) => setDueDate(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="task-project">所属项目</Label>
+            <select
+              id="task-project"
+              className={selectClass}
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
+              <option value="">无</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div className="flex items-center gap-2">

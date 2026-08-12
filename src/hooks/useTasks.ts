@@ -8,6 +8,7 @@ import {
   getBacklogTasks,
   getActiveTasks,
   getOverdueTasks,
+  getTasksByProject,
   getChecklistItems,
   createTask,
   updateTask,
@@ -27,6 +28,7 @@ export const taskKeys = {
   backlog: () => ["tasks", "backlog"] as const,
   active: () => ["tasks", "active"] as const,
   overdue: (date: string) => ["tasks", "overdue", date] as const,
+  byProject: (projectId: number) => ["tasks", "project", projectId] as const,
   checklist: (taskId: number) => ["tasks", "checklist", taskId] as const,
 };
 
@@ -55,6 +57,14 @@ export function useOverdueTasks(date: string) {
   return useQuery({
     queryKey: taskKeys.overdue(date),
     queryFn: () => getOverdueTasks(date),
+  });
+}
+
+export function useTasksByProject(projectId: number | null) {
+  return useQuery({
+    queryKey: taskKeys.byProject(projectId ?? 0),
+    queryFn: () => getTasksByProject(projectId!),
+    enabled: projectId != null,
   });
 }
 

@@ -1,9 +1,6 @@
 import { PagePlaceholder } from "@/components/layout/PagePlaceholder";
 import {
-  FolderKanban,
-  Target,
   Repeat,
-  CalendarRange,
   NotebookPen,
   Inbox,
   BookOpen,
@@ -13,26 +10,9 @@ import {
 export { DashboardPage } from "./DashboardPage";
 export { TasksPage } from "./TasksPage";
 export { CalendarPage } from "./CalendarPage";
-
-export function ProjectsPage() {
-  return (
-    <PagePlaceholder
-      title="项目"
-      description="交付型与学习研究型项目，聚焦管理，进度追踪"
-      icon={FolderKanban}
-    />
-  );
-}
-
-export function GoalsPage() {
-  return (
-    <PagePlaceholder
-      title="目标"
-      description="季度/年度/长期目标，计数型与汇总型进度"
-      icon={Target}
-    />
-  );
-}
+export { GoalsPage } from "./GoalsPage";
+export { ProjectsPage } from "./ProjectsPage";
+export { PlanPage } from "./PlanPage";
 
 export function HabitsPage() {
   return (
@@ -40,16 +20,6 @@ export function HabitsPage() {
       title="习惯"
       description="二元打卡，每日/每周频率，连续天数，热力图"
       icon={Repeat}
-    />
-  );
-}
-
-export function PlanPage() {
-  return (
-    <PagePlaceholder
-      title="周期计划"
-      description="周计划从待办池挑任务排周几，月计划调整聚焦项目"
-      icon={CalendarRange}
     />
   );
 }

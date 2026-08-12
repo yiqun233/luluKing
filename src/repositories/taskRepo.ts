@@ -62,6 +62,16 @@ export async function getActiveTasks(): Promise<Task[]> {
   );
 }
 
+// 某项目下所有未放弃未删除任务
+export async function getTasksByProject(projectId: number): Promise<Task[]> {
+  return select<Task>(
+    `SELECT * FROM tasks
+     WHERE project_id = ? AND status != 'abandoned' AND deleted_at IS NULL
+     ORDER BY is_key DESC, status ASC, plan_date ASC NULLS LAST, created_at ASC`,
+    [projectId]
+  );
+}
+
 export async function getTaskById(id: number): Promise<Task | null> {
   return selectOne<Task>(`SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL`, [
     id,
