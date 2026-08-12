@@ -9,7 +9,12 @@ let db: Database | null = null;
  */
 export async function getDb(): Promise<Database> {
   if (!db) {
-    db = await Database.load("sqlite:app.db");
+    try {
+      db = await Database.load("sqlite:app.db");
+    } catch (e) {
+      console.error("[DB] 加载数据库失败:", e);
+      throw e;
+    }
   }
   return db;
 }
@@ -22,11 +27,16 @@ export async function execute(
   bindValues?: unknown[]
 ): Promise<{ rowsAffected: number; lastInsertId: number }> {
   const database = await getDb();
-  const result = await database.execute(sql, bindValues);
-  return {
-    rowsAffected: result.rowsAffected,
-    lastInsertId: result.lastInsertId ?? 0,
-  };
+  try {
+    const result = await database.execute(sql, bindValues);
+    return {
+      rowsAffected: result.rowsAffected,
+      lastInsertId: result.lastInsertId ?? 0,
+    };
+  } catch (e) {
+    console.error("[DB execute] 失败:", e, "\nSQL:", sql, "\n参数:", bindValues);
+    throw e;
+  }
 }
 
 /**
@@ -37,7 +47,12 @@ export async function select<T>(
   bindValues?: unknown[]
 ): Promise<T[]> {
   const database = await getDb();
-  return database.select<T[]>(sql, bindValues);
+  try {
+    return await database.select<T[]>(sql, bindValues);
+  } catch (e) {
+    console.error("[DB select] 失败:", e, "\nSQL:", sql, "\n参数:", bindValues);
+    throw e;
+  }
 }
 
 /**

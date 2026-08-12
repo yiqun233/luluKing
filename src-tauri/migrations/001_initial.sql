@@ -245,26 +245,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 
 -- ========== 全文搜索（FTS5） ==========
-
-CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
-  title,
-  content,
-  content=notes,
-  content_rowid=id,
-  tokenize='unicode61'
-);
-
--- 笔记变更时同步 FTS 索引
-CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
-  INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-END;
-CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-  INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-END;
-CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-  INSERT INTO notes_fts(notes_fts, rowid, title, content) VALUES('delete', old.id, old.title, old.content);
-  INSERT INTO notes_fts(rowid, title, content) VALUES (new.id, new.title, new.content);
-END;
+-- P3 知识库阶段再启用 FTS5 虚拟表与同步触发器。
+-- 此处省略：tauri-plugin-sql 的 sqlite 特性底层 rusqlite bundled SQLite
+-- 默认未编译 FTS5，在初始迁移里建 fts5 虚拟表会导致整个迁移失败、
+-- 数据库无法初始化。P3 单独用一条迁移启用 FTS5 特性后再创建。
 
 -- ========== 索引 ==========
 
