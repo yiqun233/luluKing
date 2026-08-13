@@ -15,6 +15,7 @@ import {
 import { TaskItem } from "@/components/tasks/TaskItem";
 import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import { EventItem } from "@/components/calendar/EventItem";
+import { QueryErrorState } from "@/components/feedback/QueryErrorState";
 import {
   useTodayTasks,
   useBacklogTasks,
@@ -109,19 +110,45 @@ function HabitMiniRow({ habit }: { habit: Habit }) {
 
 export function DashboardPage() {
   const today = todayStr();
-  const { data: todayTasks = [] } = useTodayTasks(today);
-  const { data: backlog = [] } = useBacklogTasks();
-  const { data: overdue = [] } = useOverdueTasks(today);
-  const { data: events = [] } = useTodayEvents(today);
-  const { data: habits = [] } = useActiveHabits();
-  const { data: goals = [] } = useActiveGoals();
-  const { data: inbox = [] } = useInboxNotes();
+  const todayTasksQuery = useTodayTasks(today);
+  const backlogQuery = useBacklogTasks();
+  const overdueQuery = useOverdueTasks(today);
+  const eventsQuery = useTodayEvents(today);
+  const habitsQuery = useActiveHabits();
+  const goalsQuery = useActiveGoals();
+  const inboxQuery = useInboxNotes();
+  const { data: todayTasks = [] } = todayTasksQuery;
+  const { data: backlog = [] } = backlogQuery;
+  const { data: overdue = [] } = overdueQuery;
+  const { data: events = [] } = eventsQuery;
+  const { data: habits = [] } = habitsQuery;
+  const { data: goals = [] } = goalsQuery;
+  const { data: inbox = [] } = inboxQuery;
   const reviewWindows = getReviewWindows();
 
   const toggleStatus = useToggleTaskStatus();
   const updateTask = useUpdateTask();
 
   const { openEdit } = useTaskDialog();
+  const hasQueryError =
+    todayTasksQuery.isError ||
+    backlogQuery.isError ||
+    overdueQuery.isError ||
+    eventsQuery.isError ||
+    habitsQuery.isError ||
+    goalsQuery.isError ||
+    inboxQuery.isError;
+
+  const retryQueries = () =>
+    Promise.all([
+      todayTasksQuery.refetch(),
+      backlogQuery.refetch(),
+      overdueQuery.refetch(),
+      eventsQuery.refetch(),
+      habitsQuery.refetch(),
+      goalsQuery.refetch(),
+      inboxQuery.refetch(),
+    ]);
 
   const todayDone = todayTasks.filter((t) => t.status === "done").length;
   const keyTodo = todayTasks.filter((t) => t.is_key === 1 && t.status === "todo");
@@ -156,6 +183,7 @@ export function DashboardPage() {
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto max-w-3xl space-y-6">
+          {hasQueryError && <QueryErrorState onRetry={retryQueries} />}
           {/* 欠债区：逾期 + 收件箱堆积 */}
           {overdue.length > 0 && (
             <Link

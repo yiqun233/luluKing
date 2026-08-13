@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
+import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
+import { feedback } from "@/components/feedback/FeedbackProvider";
 import { todayStr } from "@/lib/date";
 import type { Task } from "@/types/entities";
 
@@ -40,6 +42,7 @@ export function TaskContextMenu({
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
   const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // 打开后按实际尺寸校正位置，避免超出视口
   useEffect(() => {
@@ -56,6 +59,7 @@ export function TaskContextMenu({
   useEffect(() => {
     if (!state) return;
     const onDown = (e: MouseEvent) => {
+      if (deleteConfirmOpen) return;
       if (!ref.current?.contains(e.target as Node)) onClose();
     };
     const onKey = (e: KeyboardEvent) => {
@@ -69,7 +73,7 @@ export function TaskContextMenu({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", onClose, true);
     };
-  }, [state, onClose]);
+  }, [state, onClose, deleteConfirmOpen]);
 
   if (!state) return null;
   const { task } = state;
@@ -80,6 +84,15 @@ export function TaskContextMenu({
   };
   const setPlan = (date: string | null) =>
     updateTask.mutate({ id: task.id, input: { plan_date: date } });
+  const handleDelete = () => {
+    deleteTask.mutate(task.id, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false);
+        feedback.success("任务已删除");
+        onClose();
+      },
+    });
+  };
 
   const itemClass =
     "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-accent";
@@ -140,11 +153,22 @@ export function TaskContextMenu({
 
       <button
         className={`${itemClass} text-destructive`}
-        onClick={run(() => deleteTask.mutate(task.id))}
+        onClick={() => setDeleteConfirmOpen(true)}
+        disabled={deleteTask.isPending}
       >
         <Trash2 className="h-3.5 w-3.5" />
         删除
       </button>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="删除任务？"
+        description="删除后任务将不再显示。请确认这不是误操作。"
+        confirmLabel="删除任务"
+        destructive
+        pending={deleteTask.isPending}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

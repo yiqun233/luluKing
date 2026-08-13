@@ -3,6 +3,7 @@ import { CheckCircle2, Circle, AlertCircle, Tag as TagIcon } from "lucide-react"
 import { QuickAddTask } from "@/components/tasks/QuickAddTask";
 import { TaskItem } from "@/components/tasks/TaskItem";
 import { TaskBulkBar } from "@/components/tasks/TaskBulkBar";
+import { QueryErrorState } from "@/components/feedback/QueryErrorState";
 import {
   TaskContextMenu,
   type ContextMenuState,
@@ -21,17 +22,22 @@ import type { Task } from "@/types/entities";
 
 export function TasksPage() {
   const today = todayStr();
-  const { data: todayTasks = [] } = useTodayTasks(today);
-  const { data: backlog = [] } = useBacklogTasks();
-  const { data: overdue = [] } = useOverdueTasks(today);
-  const { data: tags = [] } = useTags();
+  const todayTasksQuery = useTodayTasks(today);
+  const backlogQuery = useBacklogTasks();
+  const overdueQuery = useOverdueTasks(today);
+  const tagsQuery = useTags();
+  const { data: todayTasks = [] } = todayTasksQuery;
+  const { data: backlog = [] } = backlogQuery;
+  const { data: overdue = [] } = overdueQuery;
+  const { data: tags = [] } = tagsQuery;
 
   const toggleStatus = useToggleTaskStatus();
   const updateTask = useUpdateTask();
 
   const { openEdit } = useTaskDialog();
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
-  const { data: taggedIds = [] } = useTaggedIds("task", selectedTagId);
+  const taggedIdsQuery = useTaggedIds("task", selectedTagId);
+  const { data: taggedIds = [] } = taggedIdsQuery;
 
   // 批量选择
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -73,6 +79,23 @@ export function TasksPage() {
   };
 
   const selectionActive = selectedIds.length > 0;
+  const hasQueryError =
+    todayTasksQuery.isError ||
+    backlogQuery.isError ||
+    overdueQuery.isError ||
+    tagsQuery.isError ||
+    taggedIdsQuery.isError;
+
+  const retryQueries = () => {
+    const queries: Promise<unknown>[] = [
+      todayTasksQuery.refetch(),
+      backlogQuery.refetch(),
+      overdueQuery.refetch(),
+      tagsQuery.refetch(),
+    ];
+    if (selectedTagId != null) queries.push(taggedIdsQuery.refetch());
+    return Promise.all(queries);
+  };
 
   const renderTask = (task: Task) => (
     <TaskItem
@@ -114,6 +137,7 @@ export function TasksPage() {
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto max-w-3xl space-y-6">
+          {hasQueryError && <QueryErrorState onRetry={retryQueries} />}
           <QuickAddTask />
 
           {selectionActive && (

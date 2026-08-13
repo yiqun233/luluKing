@@ -19,6 +19,9 @@ import {
   formatReviewSummary,
 } from "@/repositories/reviewRepo";
 import { generateReviewDraft } from "@/ai/scenarios/reviewDraft";
+import { getAIErrorMessage } from "@/ai/aiClient";
+import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
+import { feedback } from "@/components/feedback/FeedbackProvider";
 import type { Review, ReviewType, ReviewStatus } from "@/types/entities";
 
 const selectClass =
@@ -59,11 +62,16 @@ export function ReviewEditDialog({
   const [regenerating, setRegenerating] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState("");
+  const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
+    setDraftError("");
+    setOverwriteConfirmOpen(false);
+    setDeleteConfirmOpen(false);
     if (review) {
       setType(review.type);
       setPeriodStart(review.period_start);
@@ -89,9 +97,12 @@ export function ReviewEditDialog({
       setContent(QUESTION_TEMPLATE);
       setStatus("draft");
       setAutoSummary("生成中…");
-      generateReviewSummary(startStr, endStr).then((s) =>
-        setAutoSummary(formatReviewSummary(s))
-      );
+      generateReviewSummary(startStr, endStr)
+        .then((summary) => setAutoSummary(formatReviewSummary(summary)))
+        .catch(() => {
+          setAutoSummary("");
+          setDraftError("无法生成数据摘要，请稍后重试");
+        });
     }
   }, [open, review, defaultType]);
 
@@ -105,11 +116,16 @@ export function ReviewEditDialog({
   }, [open]);
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  const handleGenerateDraft = async () => {
+  const handleGenerateDraft = async (confirmed = false) => {
     if (!autoSummary || drafting) return;
     // 覆盖已有用户内容前确认（模板原文不算用户内容）
-    if (content.trim() && content.trim() !== QUESTION_TEMPLATE.trim()) {
-      if (!window.confirm("当前已有内容，确定用 AI 草稿覆盖吗？")) return;
+    if (
+      !confirmed &&
+      content.trim() &&
+      content.trim() !== QUESTION_TEMPLATE.trim()
+    ) {
+      setOverwriteConfirmOpen(true);
+      return;
     }
     setDraftError("");
     setDrafting(true);
@@ -124,14 +140,11 @@ export function ReviewEditDialog({
         ctrl.signal
       );
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "生成失败";
       // 用户主动中断不算错误
-      if (ctrl.signal.aborted && msg.includes("abort")) {
+      if (ctrl.signal.aborted) {
         // no-op
-      } else if (msg.includes("未配置")) {
-        setDraftError("AI 未配置，请先到设置页填写 API Key");
       } else {
-        setDraftError(msg);
+        setDraftError(getAIErrorMessage(e));
       }
     } finally {
       setDrafting(false);
@@ -142,9 +155,12 @@ export function ReviewEditDialog({
   const handleRegenerate = async () => {
     if (!periodStart || !periodEnd) return;
     setRegenerating(true);
+    setDraftError("");
     try {
-      const s = await generateReviewSummary(periodStart, periodEnd);
-      setAutoSummary(formatReviewSummary(s));
+      const summary = await generateReviewSummary(periodStart, periodEnd);
+      setAutoSummary(formatReviewSummary(summary));
+    } catch {
+      setDraftError("无法生成数据摘要，请稍后重试");
     } finally {
       setRegenerating(false);
     }
@@ -153,33 +169,58 @@ export function ReviewEditDialog({
   const handleSave = () => {
     if (!periodStart || !periodEnd) return;
     if (isCreate) {
-      createReview.mutate({
-        type,
-        period_start: periodStart,
-        period_end: periodEnd,
-        auto_summary: autoSummary,
-        content: content || null,
-      });
-    } else {
-      updateReview.mutate({
-        id: review!.id,
-        input: {
+      createReview.mutate(
+        {
           type,
           period_start: periodStart,
           period_end: periodEnd,
           auto_summary: autoSummary,
           content: content || null,
-          status,
         },
-      });
+        {
+          onSuccess: () => {
+            feedback.success("复盘已保存");
+            onOpenChange(false);
+          },
+        }
+      );
+    } else {
+      updateReview.mutate(
+        {
+          id: review!.id,
+          input: {
+            type,
+            period_start: periodStart,
+            period_end: periodEnd,
+            auto_summary: autoSummary,
+            content: content || null,
+            status,
+          },
+        },
+        {
+          onSuccess: () => {
+            feedback.success("复盘已保存");
+            onOpenChange(false);
+          },
+        }
+      );
     }
-    onOpenChange(false);
   };
 
   const handleDelete = () => {
     if (!review) return;
-    deleteReview.mutate(review.id);
-    onOpenChange(false);
+    deleteReview.mutate(review.id, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false);
+        feedback.success("复盘已删除");
+        onOpenChange(false);
+      },
+    });
+  };
+
+  const confirmOverwrite = () => {
+    setOverwriteConfirmOpen(false);
+    void handleGenerateDraft(true);
   };
 
   const pending = createReview.isPending || updateReview.isPending;
@@ -257,7 +298,11 @@ export function ReviewEditDialog({
                 size="sm"
                 variant="ghost"
                 className="h-6 gap-1 px-2 text-xs"
-                onClick={drafting ? () => abortRef.current?.abort() : handleGenerateDraft}
+                onClick={
+                  drafting
+                    ? () => abortRef.current?.abort()
+                    : () => void handleGenerateDraft()
+                }
                 disabled={!autoSummary || autoSummary === "生成中…"}
               >
                 {drafting ? (
@@ -317,7 +362,7 @@ export function ReviewEditDialog({
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteReview.isPending}
             >
               <Trash2 className="h-4 w-4" />
@@ -336,6 +381,24 @@ export function ReviewEditDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={overwriteConfirmOpen}
+        onOpenChange={setOverwriteConfirmOpen}
+        title="覆盖已有内容？"
+        description="当前填写的复盘内容将被新的 AI 草稿替换。"
+        confirmLabel="覆盖并生成"
+        onConfirm={confirmOverwrite}
+      />
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="删除复盘？"
+        description="删除后复盘将不再显示。请确认这不是误操作。"
+        confirmLabel="删除复盘"
+        destructive
+        pending={deleteReview.isPending}
+        onConfirm={handleDelete}
+      />
     </Dialog>
   );
 }

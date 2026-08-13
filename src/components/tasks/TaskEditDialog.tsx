@@ -21,6 +21,8 @@ import {
 import { useProjects } from "@/hooks/useProjects";
 import { useTagsFor, useSetTags } from "@/hooks/useTags";
 import { TagSelector } from "@/components/tags/TagSelector";
+import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
+import { feedback } from "@/components/feedback/FeedbackProvider";
 import type { Task } from "@/types/entities";
 
 const selectClass =
@@ -55,6 +57,7 @@ export function TaskEditDialog({
   const { data: taskTags } = useTagsFor("task", task?.id ?? null);
   const setTagsMutation = useSetTags();
   const [tagIds, setTagIds] = useState<number[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
 
   // 打开时重置：编辑用 task 值，新建用默认值
   useEffect(() => {
@@ -92,20 +95,35 @@ export function TaskEditDialog({
     };
     if (isCreate) {
       createTaskMutation.mutate(input, {
-        onSuccess: (t) =>
-          setTagsMutation.mutate({ type: "task", id: t.id, tagIds }),
+        onSuccess: (createdTask) => {
+          setTagsMutation.mutate({ type: "task", id: createdTask.id, tagIds });
+          feedback.success("任务已保存");
+          onOpenChange(false);
+        },
       });
     } else {
-      updateTaskMutation.mutate({ id: task!.id, input });
-      setTagsMutation.mutate({ type: "task", id: task!.id, tagIds });
+      updateTaskMutation.mutate(
+        { id: task!.id, input },
+        {
+          onSuccess: () => {
+            setTagsMutation.mutate({ type: "task", id: task!.id, tagIds });
+            feedback.success("任务已保存");
+            onOpenChange(false);
+          },
+        }
+      );
     }
-    onOpenChange(false);
   };
 
   const handleDelete = () => {
     if (!task) return;
-    deleteTaskMutation.mutate(task.id);
-    onOpenChange(false);
+    deleteTaskMutation.mutate(task.id, {
+      onSuccess: () => {
+        setDeleteConfirmOpen(false);
+        feedback.success("任务已删除");
+        onOpenChange(false);
+      },
+    });
   };
 
   const pending =
@@ -206,7 +224,7 @@ export function TaskEditDialog({
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleDelete}
+              onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteTaskMutation.isPending}
             >
               <Trash2 className="h-4 w-4" />
@@ -225,6 +243,16 @@ export function TaskEditDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title="删除任务？"
+        description="删除后任务将不再显示。请确认这不是误操作。"
+        confirmLabel="删除任务"
+        destructive
+        pending={deleteTaskMutation.isPending}
+        onConfirm={handleDelete}
+      />
     </Dialog>
   );
 }
