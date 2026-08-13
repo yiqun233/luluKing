@@ -9,11 +9,14 @@ import {
   getActiveTasks,
   getOverdueTasks,
   getTasksByProject,
+  getTaskStatsByGoal,
   getChecklistItems,
   createTask,
   updateTask,
   updateTaskStatus,
   deleteTask,
+  bulkUpdateTasks,
+  bulkDeleteTasks,
   createChecklistItem,
   toggleChecklistItem,
   deleteChecklistItem,
@@ -29,8 +32,18 @@ export const taskKeys = {
   active: () => ["tasks", "active"] as const,
   overdue: (date: string) => ["tasks", "overdue", date] as const,
   byProject: (projectId: number) => ["tasks", "project", projectId] as const,
+  statsByGoal: (goalId: number) => ["tasks", "statsByGoal", goalId] as const,
   checklist: (taskId: number) => ["tasks", "checklist", taskId] as const,
 };
+
+/** 目标下任务完成统计（参考值） */
+export function useTaskStatsByGoal(goalId: number | null) {
+  return useQuery({
+    queryKey: taskKeys.statsByGoal(goalId ?? 0),
+    queryFn: () => getTaskStatsByGoal(goalId!),
+    enabled: goalId != null,
+  });
+}
 
 export function useTodayTasks(date: string) {
   return useQuery({
@@ -107,7 +120,8 @@ export function useToggleTaskStatus() {
       const queries = qc.getQueriesData<Task[]>({ queryKey: ["tasks"] });
       for (const [key, data] of queries) {
         if (key[1] === "checklist") continue;
-        if (data) {
+        // 只更新数组型结果；statsByGoal 等返回对象的查询直接跳过
+        if (Array.isArray(data)) {
           qc.setQueryData(
             key,
             data.map((t) => (t.id === id ? { ...t, status } : t))
@@ -124,6 +138,25 @@ export function useDeleteTask() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteTask(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  });
+}
+
+// ========== 批量操作 ==========
+
+export function useBulkUpdateTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, input }: { ids: number[]; input: UpdateTaskInput }) =>
+      bulkUpdateTasks(ids, input),
+    onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
+  });
+}
+
+export function useBulkDeleteTasks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => bulkDeleteTasks(ids),
     onSuccess: () => qc.invalidateQueries({ queryKey: taskKeys.all }),
   });
 }

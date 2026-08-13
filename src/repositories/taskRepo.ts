@@ -164,6 +164,91 @@ export async function deleteTask(id: number): Promise<void> {
   );
 }
 
+/**
+ * 某目标下的任务完成统计（仅作参考值展示，不写回 goal.progress_current）。
+ * 任务表无 goal_id，需经 projects 关联。
+ */
+export async function getTaskStatsByGoal(
+  goalId: number
+): Promise<{ done: number; total: number }> {
+  const row = await selectOne<{ done: number; total: number }>(
+    `SELECT
+       COUNT(*) AS total,
+       COALESCE(SUM(CASE WHEN t.status = 'done' THEN 1 ELSE 0 END), 0) AS done
+     FROM tasks t
+     JOIN projects p ON p.id = t.project_id
+     WHERE p.goal_id = ?
+       AND t.status != 'abandoned'
+       AND t.deleted_at IS NULL
+       AND p.deleted_at IS NULL`,
+    [goalId]
+  );
+  return { done: row?.done ?? 0, total: row?.total ?? 0 };
+}
+
+// ========== 批量操作 ==========
+
+// 批量更新：动态 SET + IN 子句，一条 SQL 完成
+export async function bulkUpdateTasks(
+  ids: number[],
+  input: UpdateTaskInput
+): Promise<void> {
+  if (ids.length === 0) return;
+  const fields: string[] = [];
+  const values: (string | number | null)[] = [];
+
+  if (input.title !== undefined) {
+    fields.push("title = ?");
+    values.push(input.title);
+  }
+  if (input.status !== undefined) {
+    fields.push("status = ?");
+    values.push(input.status);
+  }
+  if (input.plan_date !== undefined) {
+    fields.push("plan_date = ?");
+    values.push(input.plan_date);
+  }
+  if (input.due_date !== undefined) {
+    fields.push("due_date = ?");
+    values.push(input.due_date);
+  }
+  if (input.is_key !== undefined) {
+    fields.push("is_key = ?");
+    values.push(input.is_key);
+  }
+  if (input.project_id !== undefined) {
+    fields.push("project_id = ?");
+    values.push(input.project_id);
+  }
+  if (input.notes !== undefined) {
+    fields.push("notes = ?");
+    values.push(input.notes);
+  }
+  if (fields.length === 0) return;
+
+  fields.push("updated_at = datetime('now')");
+  const placeholders = ids.map(() => "?").join(", ");
+  await execute(
+    `UPDATE tasks SET ${fields.join(", ")} WHERE id IN (${placeholders})`,
+    [...values, ...ids]
+  );
+}
+
+// 批量软删除（同步级联清子项）
+export async function bulkDeleteTasks(ids: number[]): Promise<void> {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(", ");
+  await execute(
+    `UPDATE tasks SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id IN (${placeholders})`,
+    ids
+  );
+  await execute(
+    `UPDATE checklist_items SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE task_id IN (${placeholders})`,
+    ids
+  );
+}
+
 // ========== 清单子任务 ==========
 
 export async function getChecklistItems(taskId: number): Promise<ChecklistItem[]> {

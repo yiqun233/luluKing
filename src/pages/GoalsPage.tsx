@@ -15,6 +15,7 @@ import { ProjectEditDialog } from "@/components/projects/ProjectEditDialog";
 import { useGoals } from "@/hooks/useGoals";
 import { useProjects } from "@/hooks/useProjects";
 import { useHabits } from "@/hooks/useHabits";
+import { useTaskStatsByGoal } from "@/hooks/useTasks";
 import type { Goal, GoalPeriodType, Project, Habit } from "@/types/entities";
 
 const periodLabels: Record<GoalPeriodType, string> = {
@@ -58,6 +59,32 @@ function ProgressBar({
         {current}
         {target ? `/${target}` : ""}
       </span>
+    </div>
+  );
+}
+
+/**
+ * 目标完成情况参考值。
+ * 只做展示，不写回 goal.progress_current（进度仍由你手填，避免自动值误导）。
+ */
+function GoalReference({
+  goalId,
+  projects,
+}: {
+  goalId: number;
+  projects: Project[];
+}) {
+  const { data: taskStats } = useTaskStatsByGoal(goalId);
+  const doneProjects = projects.filter((p) => p.status === "done").length;
+
+  if (projects.length === 0 && !taskStats?.total) return null;
+
+  return (
+    <div className="rounded bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+      参考：项目 {doneProjects}/{projects.length} 完成
+      {taskStats && taskStats.total > 0 && (
+        <> · 任务 {taskStats.done}/{taskStats.total} 完成</>
+      )}
     </div>
   );
 }
@@ -135,6 +162,8 @@ function GoalCard({
 
       {expanded && (
         <div className="mt-2 space-y-2 border-t pt-2">
+          <GoalReference goalId={goal.id} projects={projects} />
+
           {projects.length > 0 && (
             <div className="space-y-1">
               <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">

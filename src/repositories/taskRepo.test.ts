@@ -9,6 +9,9 @@ vi.mock("@/db/client", () => ({
 
 import { execute, select, selectOne } from "@/db/client";
 import {
+  bulkUpdateTasks,
+  bulkDeleteTasks,
+  getTaskStatsByGoal,
   createTask,
   updateTask,
   updateTaskStatus,
@@ -228,5 +231,77 @@ describe("清单子任务", () => {
       expect.stringContaining("SET deleted_at"),
       [8]
     );
+  });
+});
+
+describe("bulkUpdateTasks", () => {
+  it("动态 SET + IN 占位符，值在前 id 在后", async () => {
+    await bulkUpdateTasks([1, 2, 3], { plan_date: "2026-08-20" });
+    expect(mockExecute).toHaveBeenCalledWith(
+      `UPDATE tasks SET plan_date = ?, updated_at = datetime('now') WHERE id IN (?, ?, ?)`,
+      ["2026-08-20", 1, 2, 3]
+    );
+  });
+
+  it("多字段按代码顺序拼接", async () => {
+    await bulkUpdateTasks([5], { is_key: 1, project_id: 7 });
+    expect(mockExecute).toHaveBeenCalledWith(
+      `UPDATE tasks SET is_key = ?, project_id = ?, updated_at = datetime('now') WHERE id IN (?)`,
+      [1, 7, 5]
+    );
+  });
+
+  it("plan_date 置 null（移入待办池）", async () => {
+    await bulkUpdateTasks([4], { plan_date: null });
+    expect(mockExecute).toHaveBeenCalledWith(expect.any(String), [null, 4]);
+  });
+
+  it("空 id 数组不调用 execute", async () => {
+    await bulkUpdateTasks([], { is_key: 1 });
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it("空输入不调用 execute", async () => {
+    await bulkUpdateTasks([1], {});
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe("bulkDeleteTasks", () => {
+  it("软删除任务并级联子项", async () => {
+    mockExecute.mockResolvedValue({ rowsAffected: 2, lastInsertId: 0 });
+    await bulkDeleteTasks([1, 2]);
+    expect(mockExecute).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("UPDATE tasks SET deleted_at"),
+      [1, 2]
+    );
+    expect(mockExecute).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("UPDATE checklist_items SET deleted_at"),
+      [1, 2]
+    );
+  });
+
+  it("空数组不调用 execute", async () => {
+    await bulkDeleteTasks([]);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe("getTaskStatsByGoal", () => {
+  it("经 projects 关联统计，排除已放弃与已删除", async () => {
+    mockSelectOne.mockResolvedValue({ done: 3, total: 8 });
+    const result = await getTaskStatsByGoal(2);
+    expect(mockSelectOne).toHaveBeenCalledWith(
+      expect.stringContaining("JOIN projects p ON p.id = t.project_id"),
+      [2]
+    );
+    expect(result).toEqual({ done: 3, total: 8 });
+  });
+
+  it("无结果时返回 0/0", async () => {
+    mockSelectOne.mockResolvedValue(null);
+    expect(await getTaskStatsByGoal(9)).toEqual({ done: 0, total: 0 });
   });
 });

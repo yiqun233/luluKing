@@ -11,6 +11,12 @@ interface TaskItemProps {
   onToggle: (id: number, status: "todo" | "done") => void;
   onToggleKey: (id: number, isKey: number) => void;
   onEdit: (task: Task) => void;
+  /** 处于批量选择模式时显示选择框 */
+  selectionActive?: boolean;
+  selected?: boolean;
+  /** shiftKey 为 true 时父组件做范围选择 */
+  onToggleSelect?: (id: number, shiftKey: boolean) => void;
+  onContextMenu?: (e: React.MouseEvent, task: Task) => void;
 }
 
 export function TaskItem({
@@ -18,31 +24,57 @@ export function TaskItem({
   onToggle,
   onToggleKey,
   onEdit,
+  selectionActive = false,
+  selected = false,
+  onToggleSelect,
+  onContextMenu,
 }: TaskItemProps) {
   const isDone = task.status === "done";
-  const isOverdue =
-    task.status === "todo" && isOverdueDate(task.due_date);
+  const isOverdue = task.status === "todo" && isOverdueDate(task.due_date);
 
   return (
     <div
+      onContextMenu={(e) => onContextMenu?.(e, task)}
       className={cn(
         "group flex items-center gap-3 rounded-md border bg-card px-3 py-2 transition-colors hover:bg-accent/40",
-        task.is_key === 1 && "border-amber-400/50 bg-amber-50/30 dark:bg-amber-950/10"
+        task.is_key === 1 &&
+          "border-amber-400/50 bg-amber-50/30 dark:bg-amber-950/10",
+        selected && "border-primary bg-primary/5 ring-1 ring-primary/40"
       )}
     >
+      {selectionActive && (
+        <>
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect?.(task.id, false)}
+            aria-label={selected ? "取消选择" : "选择任务"}
+            className="rounded-sm border-primary/60"
+          />
+          <div className="h-5 w-px shrink-0 bg-border" />
+        </>
+      )}
+
       <Checkbox
         checked={isDone}
         onCheckedChange={(checked) =>
           onToggle(task.id, checked ? "done" : "todo")
         }
+        aria-label={isDone ? "标记未完成" : "标记完成"}
       />
 
-      <button className="flex-1 text-left" onClick={() => onEdit(task)}>
+      <button
+        className="flex-1 text-left"
+        onClick={(e) => {
+          // Ctrl/Cmd/Shift + 点击进入选择，普通点击编辑
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            onToggleSelect?.(task.id, e.shiftKey);
+          } else {
+            onEdit(task);
+          }
+        }}
+      >
         <span
-          className={cn(
-            "text-sm",
-            isDone && "text-muted-foreground line-through"
-          )}
+          className={cn("text-sm", isDone && "text-muted-foreground line-through")}
         >
           {task.title}
         </span>
@@ -59,9 +91,7 @@ export function TaskItem({
         )}
         title={task.is_key === 1 ? "取消重点" : "标记重点"}
       >
-        <Star
-          className={cn("h-4 w-4", task.is_key === 1 && "fill-current")}
-        />
+        <Star className={cn("h-4 w-4", task.is_key === 1 && "fill-current")} />
       </button>
 
       {/* 日期标签 */}

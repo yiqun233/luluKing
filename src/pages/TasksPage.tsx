@@ -2,6 +2,11 @@ import { useState } from "react";
 import { CheckCircle2, Circle, AlertCircle, Tag as TagIcon } from "lucide-react";
 import { QuickAddTask } from "@/components/tasks/QuickAddTask";
 import { TaskItem } from "@/components/tasks/TaskItem";
+import { TaskBulkBar } from "@/components/tasks/TaskBulkBar";
+import {
+  TaskContextMenu,
+  type ContextMenuState,
+} from "@/components/tasks/TaskContextMenu";
 import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import {
   useTodayTasks,
@@ -28,6 +33,11 @@ export function TasksPage() {
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const { data: taggedIds = [] } = useTaggedIds("task", selectedTagId);
 
+  // 批量选择
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [lastClickedId, setLastClickedId] = useState<number | null>(null);
+  const [menuState, setMenuState] = useState<ContextMenuState | null>(null);
+
   const todayDone = todayTasks.filter((t) => t.status === "done").length;
 
   // 标签切片：选中标签时过滤所有任务
@@ -36,6 +46,33 @@ export function TasksPage() {
     selectedTagId != null
       ? allTasks.filter((t) => taggedIds.includes(t.id))
       : null;
+
+  // 当前视图中按显示顺序排列的任务（Shift 范围选择依此计算）
+  const visibleTasks = tagFiltered ?? [...overdue, ...todayTasks, ...backlog];
+  const visibleIds = visibleTasks.map((t) => t.id);
+
+  const toggleSelect = (id: number, shiftKey: boolean) => {
+    setSelectedIds((prev) => {
+      // Shift + 点击：选中上次点击到当前之间的全部任务
+      if (shiftKey && lastClickedId != null) {
+        const from = visibleIds.indexOf(lastClickedId);
+        const to = visibleIds.indexOf(id);
+        if (from !== -1 && to !== -1) {
+          const range = visibleIds.slice(
+            Math.min(from, to),
+            Math.max(from, to) + 1
+          );
+          return Array.from(new Set([...prev, ...range]));
+        }
+      }
+      return prev.includes(id)
+        ? prev.filter((v) => v !== id)
+        : [...prev, id];
+    });
+    setLastClickedId(id);
+  };
+
+  const selectionActive = selectedIds.length > 0;
 
   const renderTask = (task: Task) => (
     <TaskItem
@@ -46,6 +83,13 @@ export function TasksPage() {
         updateTask.mutate({ id, input: { is_key: isKey } })
       }
       onEdit={openEdit}
+      selectionActive={selectionActive}
+      selected={selectedIds.includes(task.id)}
+      onToggleSelect={toggleSelect}
+      onContextMenu={(e, t) => {
+        e.preventDefault();
+        setMenuState({ task: t, x: e.clientX, y: e.clientY });
+      }}
     />
   );
 
@@ -62,7 +106,8 @@ export function TasksPage() {
         <div>
           <h1 className="text-lg font-semibold">任务</h1>
           <p className="text-xs text-muted-foreground">
-            今日 {todayDone}/{todayTasks.length} 完成
+            今日 {todayDone}/{todayTasks.length} 完成 · Ctrl/Shift+点击多选 ·
+            右键更多操作
           </p>
         </div>
       </header>
@@ -70,6 +115,15 @@ export function TasksPage() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="mx-auto max-w-3xl space-y-6">
           <QuickAddTask />
+
+          {selectionActive && (
+            <TaskBulkBar
+              selectedIds={selectedIds}
+              allIds={visibleIds}
+              onSelectAll={() => setSelectedIds(visibleIds)}
+              onClear={() => setSelectedIds([])}
+            />
+          )}
 
           {/* 标签切片筛选 */}
           {tags.length > 0 && (
@@ -157,6 +211,13 @@ export function TasksPage() {
           )}
         </div>
       </div>
+
+      <TaskContextMenu
+        state={menuState}
+        onClose={() => setMenuState(null)}
+        onEdit={openEdit}
+        onSelect={(id) => toggleSelect(id, false)}
+      />
     </div>
   );
 }
