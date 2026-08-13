@@ -79,9 +79,11 @@ export function Sidebar() {
     <aside className="flex w-56 flex-col border-r bg-sidebar text-sidebar-foreground">
       {/* Logo / 标题 */}
       <div className="flex h-14 items-center gap-2 px-5">
-        <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
-          <span className="text-sm font-bold text-primary-foreground">L</span>
-        </div>
+        <img
+          src="/lulu.png"
+          alt="个人工作台"
+          className="h-7 w-7 shrink-0 object-contain"
+        />
         <span className="text-sm font-semibold">个人工作台</span>
       </div>
 
