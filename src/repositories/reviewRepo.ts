@@ -3,6 +3,7 @@
 // ============================================================
 
 import { execute, select, selectOne } from "@/db/client";
+import { format, subDays, differenceInDays } from "date-fns";
 import type { Review, ReviewType, ReviewStatus } from "@/types/entities";
 
 export interface CreateReviewInput {
@@ -25,9 +26,21 @@ export interface UpdateReviewInput {
 export interface ReviewSummary {
   doneTasks: number;
   totalTasks: number;
+  /** 上一个等长周期的完成数，用于环比 */
+  prevDoneTasks: number;
+  prevTotalTasks: number;
   inboxCount: number;
   overdueCount: number;
   goals: { title: string; current: number; target: number | null }[];
+  habits: HabitSummary[];
+}
+
+export interface HabitSummary {
+  title: string;
+  /** 周期内打卡次数 */
+  count: number;
+  /** 周期内应打卡次数（daily 为周期天数，weekly 为 frequency_target × 周数） */
+  target: number;
 }
 
 export async function getReviews(): Promise<Review[]> {
@@ -111,6 +124,42 @@ export async function deleteReview(id: number): Promise<void> {
   );
 }
 
+/** 周期天数（含首尾） */
+export function periodDays(periodStart: string, periodEnd: string): number {
+  return (
+    differenceInDays(
+      new Date(periodEnd + "T00:00:00"),
+      new Date(periodStart + "T00:00:00")
+    ) + 1
+  );
+}
+
+/** 上一个等长周期（紧邻当前周期之前） */
+export function prevPeriod(
+  periodStart: string,
+  periodEnd: string
+): { start: string; end: string } {
+  const days = periodDays(periodStart, periodEnd);
+  const prevEnd = subDays(new Date(periodStart + "T00:00:00"), 1);
+  const prevStart = subDays(prevEnd, days - 1);
+  return {
+    start: format(prevStart, "yyyy-MM-dd"),
+    end: format(prevEnd, "yyyy-MM-dd"),
+  };
+}
+
+/** 习惯在周期内的应打卡次数 */
+function habitTarget(
+  frequencyType: string,
+  frequencyTarget: number,
+  days: number
+): number {
+  if (frequencyType === "weekly") {
+    return frequencyTarget * Math.max(1, Math.round(days / 7));
+  }
+  return days;
+}
+
 /** 统计指定周期内的关键数据，用于复盘自动摘要 */
 export async function generateReviewSummary(
   periodStart: string,
@@ -125,6 +174,17 @@ export async function generateReviewSummary(
     `SELECT COUNT(*) as c FROM tasks
      WHERE plan_date BETWEEN ? AND ? AND status != 'abandoned' AND deleted_at IS NULL`,
     [periodStart, periodEnd]
+  );
+  const prev = prevPeriod(periodStart, periodEnd);
+  const prevDoneTasks = await selectOne<{ c: number }>(
+    `SELECT COUNT(*) as c FROM tasks
+     WHERE plan_date BETWEEN ? AND ? AND status = 'done' AND deleted_at IS NULL`,
+    [prev.start, prev.end]
+  );
+  const prevTotalTasks = await selectOne<{ c: number }>(
+    `SELECT COUNT(*) as c FROM tasks
+     WHERE plan_date BETWEEN ? AND ? AND status != 'abandoned' AND deleted_at IS NULL`,
+    [prev.start, prev.end]
   );
   const inboxCount = await selectOne<{ c: number }>(
     `SELECT COUNT(*) as c FROM notes
@@ -141,28 +201,92 @@ export async function generateReviewSummary(
      ORDER BY period_type ASC, created_at ASC`
   );
 
+  // 习惯打卡：LEFT JOIN 保证周期内零打卡的习惯也出现（正是要暴露的异常）
+  const habitRows = await select<{
+    title: string;
+    frequency_type: string;
+    frequency_target: number;
+    count: number;
+  }>(
+    `SELECT h.title, h.frequency_type, h.frequency_target,
+            COUNT(l.id) as count
+     FROM habits h
+     LEFT JOIN habit_logs l
+       ON l.habit_id = h.id AND l.date BETWEEN ? AND ?
+     WHERE h.status = 'active' AND h.deleted_at IS NULL
+     GROUP BY h.id
+     ORDER BY h.created_at ASC`,
+    [periodStart, periodEnd]
+  );
+  const days = periodDays(periodStart, periodEnd);
+  const habits: HabitSummary[] = habitRows.map((r) => ({
+    title: r.title,
+    count: r.count,
+    target: habitTarget(r.frequency_type, r.frequency_target, days),
+  }));
+
   return {
     doneTasks: doneTasks?.c ?? 0,
     totalTasks: totalTasks?.c ?? 0,
+    prevDoneTasks: prevDoneTasks?.c ?? 0,
+    prevTotalTasks: prevTotalTasks?.c ?? 0,
     inboxCount: inboxCount?.c ?? 0,
     overdueCount: overdueCount?.c ?? 0,
     goals,
+    habits,
   };
 }
 
-/** 将结构化摘要格式化为文本 */
+/** 完成率，分母为 0 时返回 null（无从判断，不标异常） */
+function rate(done: number, total: number): number | null {
+  return total > 0 ? done / total : null;
+}
+
+/**
+ * 将结构化摘要格式化为文本。
+ * 不只罗列数字：带上周期对比与异常标记，让"该关注什么"直接可见（业务设计 4.8.3）。
+ */
 export function formatReviewSummary(s: ReviewSummary): string {
-  const lines: string[] = [
-    `任务：完成 ${s.doneTasks}/${s.totalTasks}`,
-    `收件箱：${s.inboxCount} 条待整理`,
-    `逾期：${s.overdueCount} 条待重新安排`,
-  ];
+  // 任务：本期 vs 上期完成率
+  const cur = rate(s.doneTasks, s.totalTasks);
+  const prev = rate(s.prevDoneTasks, s.prevTotalTasks);
+  let taskLine = `任务：完成 ${s.doneTasks}/${s.totalTasks}`;
+  if (s.prevTotalTasks > 0) {
+    taskLine += `（上期 ${s.prevDoneTasks}/${s.prevTotalTasks}`;
+    if (cur != null && prev != null) {
+      if (cur < prev) taskLine += " ↓ 下降";
+      else if (cur > prev) taskLine += " ↑ 提升";
+      else taskLine += " 持平";
+    }
+    taskLine += "）";
+  }
+
+  const lines: string[] = [taskLine];
+
+  if (s.habits.length > 0) {
+    lines.push("习惯：");
+    for (const h of s.habits) {
+      const gap = h.target - h.count;
+      const mark =
+        gap <= 0 ? " ✓" : h.count === 0 ? " ⚠ 本期零打卡" : ` ⚠ 差 ${gap} 次`;
+      lines.push(`  · ${h.title} ${h.count}/${h.target}${mark}`);
+    }
+  }
+
   if (s.goals.length > 0) {
     lines.push("目标进度：");
     for (const g of s.goals) {
-      const progress = g.target ? `${g.current}/${g.target}` : `${g.current}`;
-      lines.push(`  · ${g.title} ${progress}`);
+      if (g.target) {
+        // 目标完成率不足一半即提醒，避免临期才发现
+        const mark = g.current / g.target < 0.5 ? " ⚠ 落后" : "";
+        lines.push(`  · ${g.title} ${g.current}/${g.target}${mark}`);
+      } else {
+        lines.push(`  · ${g.title} ${g.current}`);
+      }
     }
   }
+
+  lines.push(`收件箱：${s.inboxCount} 条待整理`);
+  lines.push(`逾期：${s.overdueCount} 条待重新安排`);
   return lines.join("\n");
 }

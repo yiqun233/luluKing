@@ -11,6 +11,7 @@ import {
   Inbox,
   BookOpen,
   Search,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -59,6 +60,9 @@ const navSections: NavSection[] = [
     items: [{ to: "/search", label: "搜索", icon: Search }],
   },
 ];
+
+// 设置入口固定在底部，不参与数字快捷键
+const SETTINGS_NAV = { to: "/settings", label: "设置", icon: Settings };
 
 // 快捷键角标（与 useGlobalShortcuts 的 ROUTES 顺序对应）
 const SHORTCUT_MAP: Record<string, string> = {
@@ -124,6 +128,24 @@ export function Sidebar() {
           </div>
         ))}
       </nav>
+
+      {/* 底部设置入口 */}
+      <div className="border-t px-3 py-2">
+        <NavLink
+          to={SETTINGS_NAV.to}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+              isActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+            )
+          }
+        >
+          <SETTINGS_NAV.icon className="h-4 w-4 shrink-0" />
+          <span className="flex-1">{SETTINGS_NAV.label}</span>
+        </NavLink>
+      </div>
     </aside>
   );
 }

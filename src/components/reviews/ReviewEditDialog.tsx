@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { Trash2, RefreshCw } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Trash2, RefreshCw, Sparkles, Square } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
 import {
   Dialog,
@@ -17,6 +18,7 @@ import {
   generateReviewSummary,
   formatReviewSummary,
 } from "@/repositories/reviewRepo";
+import { generateReviewDraft } from "@/ai/scenarios/reviewDraft";
 import type { Review, ReviewType, ReviewStatus } from "@/types/entities";
 
 const selectClass =
@@ -55,6 +57,10 @@ export function ReviewEditDialog({
   const [content, setContent] = useState("");
   const [status, setStatus] = useState<ReviewStatus>("draft");
   const [regenerating, setRegenerating] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!open) return;
@@ -88,6 +94,50 @@ export function ReviewEditDialog({
       );
     }
   }, [open, review, defaultType]);
+
+  // 弹窗关闭时中断进行中的 AI 生成
+  useEffect(() => {
+    if (!open && abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setDrafting(false);
+    }
+  }, [open]);
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const handleGenerateDraft = async () => {
+    if (!autoSummary || drafting) return;
+    // 覆盖已有用户内容前确认（模板原文不算用户内容）
+    if (content.trim() && content.trim() !== QUESTION_TEMPLATE.trim()) {
+      if (!window.confirm("当前已有内容，确定用 AI 草稿覆盖吗？")) return;
+    }
+    setDraftError("");
+    setDrafting(true);
+    setContent("");
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      await generateReviewDraft(
+        autoSummary,
+        type,
+        (chunk) => setContent((prev) => prev + chunk),
+        ctrl.signal
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "生成失败";
+      // 用户主动中断不算错误
+      if (ctrl.signal.aborted && msg.includes("abort")) {
+        // no-op
+      } else if (msg.includes("未配置")) {
+        setDraftError("AI 未配置，请先到设置页填写 API Key");
+      } else {
+        setDraftError(msg);
+      }
+    } finally {
+      setDrafting(false);
+      abortRef.current = null;
+    }
+  };
 
   const handleRegenerate = async () => {
     if (!periodStart || !periodEnd) return;
@@ -201,7 +251,41 @@ export function ReviewEditDialog({
 
           {/* 引导问题 / 内容 */}
           <div className="space-y-1.5">
-            <Label htmlFor="rv-content">回顾与计划</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="rv-content">回顾与计划</Label>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 gap-1 px-2 text-xs"
+                onClick={drafting ? () => abortRef.current?.abort() : handleGenerateDraft}
+                disabled={!autoSummary || autoSummary === "生成中…"}
+              >
+                {drafting ? (
+                  <>
+                    <Square className="h-3 w-3" />
+                    停止
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-3 w-3 text-violet-500" />
+                    AI 生成草稿
+                  </>
+                )}
+              </Button>
+            </div>
+            {draftError && (
+              <div className="flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
+                <span>{draftError}</span>
+                {draftError.includes("未配置") && (
+                  <button
+                    onClick={() => navigate("/settings")}
+                    className="underline underline-offset-2"
+                  >
+                    去设置
+                  </button>
+                )}
+              </div>
+            )}
             <Textarea
               id="rv-content"
               value={content}

@@ -9,3 +9,4 @@ export { InboxPage } from "./InboxPage";
 export { KnowledgePage } from "./KnowledgePage";
 export { ReviewPage } from "./ReviewPage";
 export { SearchPage } from "./SearchPage";
+export { SettingsPage } from "./SettingsPage";
