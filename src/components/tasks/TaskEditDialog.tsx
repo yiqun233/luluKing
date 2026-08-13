@@ -43,7 +43,7 @@ export function TaskEditDialog({
   const [isKey, setIsKey] = useState(0);
   const [projectId, setProjectId] = useState("");
   const [notes, setNotes] = useState("");
-  const { data: taskTags = [] } = useTagsFor("task", task?.id ?? null);
+  const { data: taskTags } = useTagsFor("task", task?.id ?? null);
   const setTagsMutation = useSetTags();
   const [tagIds, setTagIds] = useState<number[]>([]);
 
@@ -59,7 +59,7 @@ export function TaskEditDialog({
   }, [task]);
 
   useEffect(() => {
-    setTagIds(taskTags.map((t) => t.id));
+    setTagIds(taskTags?.map((t) => t.id) ?? []);
   }, [taskTags]);
 
   const handleSave = () => {

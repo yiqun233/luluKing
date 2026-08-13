@@ -42,7 +42,7 @@ export function NoteEditDialog({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [subjectId, setSubjectId] = useState("");
-  const { data: noteTags = [] } = useTagsFor("note", note?.id ?? null);
+  const { data: noteTags } = useTagsFor("note", note?.id ?? null);
   const setTagsMutation = useSetTags();
   const [tagIds, setTagIds] = useState<number[]>([]);
 
@@ -57,7 +57,7 @@ export function NoteEditDialog({
   }, [open, note, defaultSubjectId]);
 
   useEffect(() => {
-    setTagIds(noteTags.map((t) => t.id));
+    setTagIds(noteTags?.map((t) => t.id) ?? []);
   }, [noteTags]);
 
   const handleSave = () => {
