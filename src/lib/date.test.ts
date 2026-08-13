@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { todayStr, formatDateLabel, isOverdueDate } from "@/lib/date";
+import { todayStr, formatDateLabel, isOverdueDate, getReviewWindows } from "@/lib/date";
 
 describe("date 工具", () => {
   beforeEach(() => {
@@ -65,6 +65,48 @@ describe("date 工具", () => {
     });
     it("未来不算逾期", () => {
       expect(isOverdueDate("2026-08-13")).toBe(false);
+    });
+  });
+
+  describe("getReviewWindows", () => {
+    // 2026-08 共 31 天；08-12 周三
+    it("周三非月末：两个窗口都关闭", () => {
+      expect(getReviewWindows(new Date(2026, 7, 12))).toEqual({
+        week: false,
+        month: false,
+      });
+    });
+
+    it("周六开启周复盘", () => {
+      expect(getReviewWindows(new Date(2026, 7, 15))).toEqual({
+        week: true,
+        month: false,
+      });
+    });
+
+    it("周日开启周复盘", () => {
+      expect(getReviewWindows(new Date(2026, 7, 16))).toEqual({
+        week: true,
+        month: false,
+      });
+    });
+
+    it("月末最后3天开启月复盘（8月29日周六，双开）", () => {
+      expect(getReviewWindows(new Date(2026, 7, 29))).toEqual({
+        week: true,
+        month: true,
+      });
+    });
+
+    it("月末31日周一仅月复盘", () => {
+      expect(getReviewWindows(new Date(2026, 7, 31))).toEqual({
+        week: false,
+        month: true,
+      });
+    });
+
+    it("2月末按实际天数计算（2027-02-28 为月末）", () => {
+      expect(getReviewWindows(new Date(2027, 1, 28)).month).toBe(true);
     });
   });
 });

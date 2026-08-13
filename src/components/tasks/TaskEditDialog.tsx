@@ -15,6 +15,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ChecklistEditor } from "./ChecklistEditor";
 import { useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
 import { useProjects } from "@/hooks/useProjects";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { Task } from "@/types/entities";
 
 const selectClass =
@@ -41,6 +43,9 @@ export function TaskEditDialog({
   const [isKey, setIsKey] = useState(0);
   const [projectId, setProjectId] = useState("");
   const [notes, setNotes] = useState("");
+  const { data: taskTags = [] } = useTagsFor("task", task?.id ?? null);
+  const setTagsMutation = useSetTags();
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (task) {
@@ -52,6 +57,10 @@ export function TaskEditDialog({
       setNotes(task.notes ?? "");
     }
   }, [task]);
+
+  useEffect(() => {
+    setTagIds(taskTags.map((t) => t.id));
+  }, [taskTags]);
 
   const handleSave = () => {
     if (!task) return;
@@ -66,6 +75,7 @@ export function TaskEditDialog({
         notes: notes || null,
       },
     });
+    setTagsMutation.mutate({ type: "task", id: task.id, tagIds });
     onOpenChange(false);
   };
 
@@ -153,6 +163,11 @@ export function TaskEditDialog({
               rows={3}
               placeholder="补充说明…"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
           </div>
 
           {task && <ChecklistEditor taskId={task.id} />}

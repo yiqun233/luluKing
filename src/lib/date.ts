@@ -31,3 +31,21 @@ export function isOverdueDate(dateStr: string | null): boolean {
   if (!dateStr) return false;
   return dateStr < todayStr();
 }
+
+/**
+ * 判断是否处于复盘窗口。
+ * 周复盘：周六/周日；月复盘：月末最后 3 天。
+ * @param now 可传入固定日期用于测试，默认当前时间
+ */
+export function getReviewWindows(now: Date = new Date()): {
+  week: boolean;
+  month: boolean;
+} {
+  const dow = now.getDay(); // 0=周日 6=周六
+  const dom = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return {
+    week: dow === 0 || dow === 6,
+    month: dom >= daysInMonth - 2,
+  };
+}

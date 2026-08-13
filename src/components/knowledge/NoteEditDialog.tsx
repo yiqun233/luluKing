@@ -13,6 +13,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/hooks/useNotes";
 import { useSubjects } from "@/hooks/useSubjects";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { Note } from "@/types/entities";
 
 const selectClass =
@@ -40,6 +42,9 @@ export function NoteEditDialog({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [subjectId, setSubjectId] = useState("");
+  const { data: noteTags = [] } = useTagsFor("note", note?.id ?? null);
+  const setTagsMutation = useSetTags();
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -50,6 +55,10 @@ export function NoteEditDialog({
       );
     }
   }, [open, note, defaultSubjectId]);
+
+  useEffect(() => {
+    setTagIds(noteTags.map((t) => t.id));
+  }, [noteTags]);
 
   const handleSave = () => {
     if (isCreate) {
@@ -69,6 +78,7 @@ export function NoteEditDialog({
           subject_id: subjectId ? Number(subjectId) : null,
         },
       });
+      setTagsMutation.mutate({ type: "note", id: note!.id, tagIds });
     }
     onOpenChange(false);
   };
@@ -124,6 +134,13 @@ export function NoteEditDialog({
               ))}
             </select>
           </div>
+
+          {!isCreate && (
+            <div className="space-y-1.5">
+              <Label>标签</Label>
+              <TagSelector value={tagIds} onChange={setTagIds} />
+            </div>
+          )}
         </div>
         <DialogFooter className="sm:justify-between">
           {!isCreate ? (
