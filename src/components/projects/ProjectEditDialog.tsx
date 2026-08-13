@@ -26,6 +26,8 @@ const selectClass =
 interface ProjectEditDialogProps {
   project: Project | null; // null = 新建
   defaultType?: ProjectType;
+  /** 新建时预填的关联目标 */
+  defaultGoalId?: number | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -41,6 +43,7 @@ const statusOptions: { value: ProjectStatus; label: string }[] = [
 export function ProjectEditDialog({
   project,
   defaultType = "delivery",
+  defaultGoalId = null,
   open,
   onOpenChange,
 }: ProjectEditDialogProps) {
@@ -61,12 +64,14 @@ export function ProjectEditDialog({
     if (open) {
       setTitle(project?.title ?? "");
       setType(project?.type ?? defaultType);
-      setGoalId(project?.goal_id?.toString() ?? "");
+      setGoalId(
+        (project?.goal_id ?? defaultGoalId)?.toString() ?? ""
+      );
       setStatus(project?.status ?? "active");
       setIsFocus(!!project?.is_focus);
       setNotes(project?.notes ?? "");
     }
-  }, [open, project, defaultType]);
+  }, [open, project, defaultType, defaultGoalId]);
 
   const handleSave = () => {
     if (isCreate) {

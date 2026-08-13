@@ -62,13 +62,19 @@ export function NoteEditDialog({
 
   const handleSave = () => {
     if (isCreate) {
-      createNote.mutate({
-        title: title.trim() || null,
-        content: content || "",
-        status: "knowledge",
-        subject_id: subjectId ? Number(subjectId) : null,
-        source: "new",
-      });
+      createNote.mutate(
+        {
+          title: title.trim() || null,
+          content: content || "",
+          status: "knowledge",
+          subject_id: subjectId ? Number(subjectId) : null,
+          source: "new",
+        },
+        {
+          onSuccess: (n) =>
+            setTagsMutation.mutate({ type: "note", id: n.id, tagIds }),
+        }
+      );
     } else {
       updateNote.mutate({
         id: note!.id,
@@ -135,12 +141,10 @@ export function NoteEditDialog({
             </select>
           </div>
 
-          {!isCreate && (
-            <div className="space-y-1.5">
-              <Label>标签</Label>
-              <TagSelector value={tagIds} onChange={setTagIds} />
-            </div>
-          )}
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
+          </div>
         </div>
         <DialogFooter className="sm:justify-between">
           {!isCreate ? (

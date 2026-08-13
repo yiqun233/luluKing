@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProjectEditDialog } from "@/components/projects/ProjectEditDialog";
 import { MaterialEditor } from "@/components/projects/MaterialEditor";
 import { TaskItem } from "@/components/tasks/TaskItem";
-import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
+import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import {
   useProjects,
   useToggleProjectFocus,
@@ -16,7 +16,7 @@ import {
   useToggleTaskStatus,
   useUpdateTask,
 } from "@/hooks/useTasks";
-import type { Project, ProjectType, Task } from "@/types/entities";
+import type { Project, ProjectType } from "@/types/entities";
 
 const statusLabels: Record<string, string> = {
   inactive: "未启动",
@@ -48,9 +48,8 @@ function ProjectCard({
   const { data: tasks = [] } = useTasksByProject(project.id);
   const toggleStatus = useToggleTaskStatus();
   const updateTask = useUpdateTask();
+  const { openEdit, openCreate } = useTaskDialog();
   const [showTasks, setShowTasks] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
 
   const openCount = tasks.filter((t) => t.status === "todo").length;
 
@@ -91,24 +90,29 @@ function ProjectCard({
         </button>
       </div>
 
-      {(goalTitle || tasks.length > 0) && (
-        <div className="mt-1.5 flex items-center gap-3 pl-6 text-xs text-muted-foreground">
-          {goalTitle && <span>🎯 {goalTitle}</span>}
-          {tasks.length > 0 && (
-            <button
-              onClick={() => setShowTasks((v) => !v)}
-              className="flex items-center gap-0.5 hover:text-foreground"
-            >
-              {showTasks ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-              {openCount}/{tasks.length} 个任务
-            </button>
-          )}
-        </div>
-      )}
+      <div className="mt-1.5 flex items-center gap-3 pl-6 text-xs text-muted-foreground">
+        {goalTitle && <span>🎯 {goalTitle}</span>}
+        {tasks.length > 0 && (
+          <button
+            onClick={() => setShowTasks((v) => !v)}
+            className="flex items-center gap-0.5 hover:text-foreground"
+          >
+            {showTasks ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+            {openCount}/{tasks.length} 个任务
+          </button>
+        )}
+        <button
+          onClick={() => openCreate(project.id)}
+          className="flex items-center gap-0.5 hover:text-foreground"
+        >
+          <Plus className="h-3 w-3" />
+          新建任务
+        </button>
+      </div>
 
       {showTasks && tasks.length > 0 && (
         <div className="mt-2 space-y-1.5 border-t pt-2">
@@ -120,10 +124,7 @@ function ProjectCard({
               onToggleKey={(id, isKey) =>
                 updateTask.mutate({ id, input: { is_key: isKey } })
               }
-              onEdit={(task) => {
-                setEditingTask(task);
-                setTaskDialogOpen(true);
-              }}
+              onEdit={openEdit}
             />
           ))}
         </div>
@@ -134,12 +135,6 @@ function ProjectCard({
           <MaterialEditor project={project} />
         </div>
       )}
-
-      <TaskEditDialog
-        task={editingTask}
-        open={taskDialogOpen}
-        onOpenChange={setTaskDialogOpen}
-      />
     </div>
   );
 }

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -14,7 +13,7 @@ import {
   Repeat,
 } from "lucide-react";
 import { TaskItem } from "@/components/tasks/TaskItem";
-import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
+import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import { EventItem } from "@/components/calendar/EventItem";
 import {
   useTodayTasks,
@@ -122,13 +121,7 @@ export function DashboardPage() {
   const toggleStatus = useToggleTaskStatus();
   const updateTask = useUpdateTask();
 
-  const [editing, setEditing] = useState<Task | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const openEdit = (task: Task) => {
-    setEditing(task);
-    setDialogOpen(true);
-  };
+  const { openEdit } = useTaskDialog();
 
   const todayDone = todayTasks.filter((t) => t.status === "done").length;
   const keyTodo = todayTasks.filter((t) => t.is_key === 1 && t.status === "todo");
@@ -332,12 +325,6 @@ export function DashboardPage() {
           )}
         </div>
       </div>
-
-      <TaskEditDialog
-        task={editing}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
     </div>
   );
 }

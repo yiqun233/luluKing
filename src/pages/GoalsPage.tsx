@@ -1,10 +1,21 @@
 import { useState } from "react";
-import { Target, Plus } from "lucide-react";
+import { Link } from "react-router-dom";
+import {
+  Target,
+  Plus,
+  ChevronDown,
+  ChevronRight,
+  Repeat,
+  FolderKanban,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GoalEditDialog } from "@/components/goals/GoalEditDialog";
+import { ProjectEditDialog } from "@/components/projects/ProjectEditDialog";
 import { useGoals } from "@/hooks/useGoals";
-import type { Goal, GoalPeriodType } from "@/types/entities";
+import { useProjects } from "@/hooks/useProjects";
+import { useHabits } from "@/hooks/useHabits";
+import type { Goal, GoalPeriodType, Project, Habit } from "@/types/entities";
 
 const periodLabels: Record<GoalPeriodType, string> = {
   quarter: "季度目标",
@@ -15,6 +26,14 @@ const periodLabels: Record<GoalPeriodType, string> = {
 const statusLabels: Record<string, string> = {
   active: "进行中",
   done: "已完成",
+  abandoned: "已放弃",
+};
+
+const projectStatusLabels: Record<string, string> = {
+  inactive: "未启动",
+  active: "进行中",
+  done: "已完成",
+  archived: "已归档",
   abandoned: "已放弃",
 };
 
@@ -43,10 +62,145 @@ function ProgressBar({
   );
 }
 
+/** 目标卡片：可展开查看下属项目与关联习惯 */
+function GoalCard({
+  goal,
+  projects,
+  habits,
+  onEdit,
+  onCreateProject,
+}: {
+  goal: Goal;
+  projects: Project[];
+  habits: Habit[];
+  onEdit: () => void;
+  onCreateProject: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const pct =
+    goal.progress_target && goal.progress_target > 0
+      ? Math.min(
+          100,
+          Math.round((goal.progress_current / goal.progress_target) * 100)
+        )
+      : 0;
+
+  return (
+    <div className="rounded-md border bg-card px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <button onClick={onEdit} className="min-w-0 flex-1 text-left">
+          <span
+            className={`text-sm font-medium ${
+              goal.status === "done" ? "text-muted-foreground line-through" : ""
+            }`}
+          >
+            {goal.title}
+          </span>
+        </button>
+        <Badge
+          variant={
+            goal.status === "active"
+              ? "default"
+              : goal.status === "done"
+                ? "secondary"
+                : "outline"
+          }
+        >
+          {statusLabels[goal.status]}
+        </Badge>
+      </div>
+
+      <div className="mt-2">
+        <ProgressBar
+          current={goal.progress_current}
+          target={goal.progress_target}
+        />
+      </div>
+
+      <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+        {goal.period_value && <span>{goal.period_value}</span>}
+        {goal.progress_target ? <span>{pct}%</span> : null}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-0.5 hover:text-foreground"
+        >
+          {expanded ? (
+            <ChevronDown className="h-3 w-3" />
+          ) : (
+            <ChevronRight className="h-3 w-3" />
+          )}
+          {projects.length} 个项目 · {habits.length} 个习惯
+        </button>
+      </div>
+
+      {expanded && (
+        <div className="mt-2 space-y-2 border-t pt-2">
+          {projects.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <FolderKanban className="h-3 w-3" />
+                项目
+              </div>
+              {projects.map((p) => (
+                <Link
+                  key={p.id}
+                  to="/projects"
+                  className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-accent/40"
+                >
+                  <span className="truncate">{p.title}</span>
+                  <Badge variant="outline" className="shrink-0 text-[10px]">
+                    {projectStatusLabels[p.status]}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          {habits.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                <Repeat className="h-3 w-3" />
+                习惯
+              </div>
+              {habits.map((h) => (
+                <Link
+                  key={h.id}
+                  to="/habits"
+                  className="flex items-center justify-between gap-2 rounded px-2 py-1 text-xs hover:bg-accent/40"
+                >
+                  <span className="truncate">{h.title}</span>
+                  <span className="shrink-0 text-muted-foreground">
+                    {h.frequency_type === "weekly"
+                      ? `每周 ${h.frequency_target} 次`
+                      : "每日"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={onCreateProject}
+            className="flex w-full items-center justify-center gap-1 rounded-md border border-dashed py-1.5 text-xs text-muted-foreground hover:bg-accent/40"
+          >
+            <Plus className="h-3 w-3" />
+            为此目标新建项目
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function GoalsPage() {
   const { data: goals = [] } = useGoals();
+  const { data: allProjects = [] } = useProjects();
+  const { data: allHabits = [] } = useHabits();
+
   const [editing, setEditing] = useState<Goal | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [projectGoalId, setProjectGoalId] = useState<number | null>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
 
   const openCreate = () => {
     setEditing(null);
@@ -55,6 +209,10 @@ export function GoalsPage() {
   const openEdit = (goal: Goal) => {
     setEditing(goal);
     setDialogOpen(true);
+  };
+  const openCreateProject = (goalId: number) => {
+    setProjectGoalId(goalId);
+    setProjectDialogOpen(true);
   };
 
   // 按 period_type 分组
@@ -97,63 +255,18 @@ export function GoalsPage() {
                     {periodLabels[pt]}（{list.length}）
                   </div>
                   <div className="space-y-2">
-                    {list.map((goal) => {
-                      const pct =
-                        goal.progress_target && goal.progress_target > 0
-                          ? Math.min(
-                              100,
-                              Math.round(
-                                (goal.progress_current / goal.progress_target) *
-                                  100
-                              )
-                            )
-                          : 0;
-                      return (
-                        <button
-                          key={goal.id}
-                          onClick={() => openEdit(goal)}
-                          className="w-full rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-accent/40"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span
-                              className={`text-sm font-medium ${
-                                goal.status === "done"
-                                  ? "text-muted-foreground line-through"
-                                  : ""
-                              }`}
-                            >
-                              {goal.title}
-                            </span>
-                            <Badge
-                              variant={
-                                goal.status === "active"
-                                  ? "default"
-                                  : goal.status === "done"
-                                    ? "secondary"
-                                    : "outline"
-                              }
-                            >
-                              {statusLabels[goal.status]}
-                            </Badge>
-                          </div>
-                          <div className="mt-2">
-                            <ProgressBar
-                              current={goal.progress_current}
-                              target={goal.progress_target}
-                            />
-                          </div>
-                          {(goal.period_value || goal.progress_target) && (
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {goal.period_value && <span>{goal.period_value}</span>}
-                              {goal.period_value && goal.progress_target && (
-                                <span> · </span>
-                              )}
-                              {goal.progress_target && <span>{pct}%</span>}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
+                    {list.map((goal) => (
+                      <GoalCard
+                        key={goal.id}
+                        goal={goal}
+                        projects={allProjects.filter(
+                          (p) => p.goal_id === goal.id
+                        )}
+                        habits={allHabits.filter((h) => h.goal_id === goal.id)}
+                        onEdit={() => openEdit(goal)}
+                        onCreateProject={() => openCreateProject(goal.id)}
+                      />
+                    ))}
                   </div>
                 </section>
               );
@@ -166,6 +279,12 @@ export function GoalsPage() {
         goal={editing}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+      />
+      <ProjectEditDialog
+        project={null}
+        defaultGoalId={projectGoalId}
+        open={projectDialogOpen}
+        onOpenChange={setProjectDialogOpen}
       />
     </div>
   );

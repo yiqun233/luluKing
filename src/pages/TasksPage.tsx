@@ -2,7 +2,7 @@ import { useState } from "react";
 import { CheckCircle2, Circle, AlertCircle, Tag as TagIcon } from "lucide-react";
 import { QuickAddTask } from "@/components/tasks/QuickAddTask";
 import { TaskItem } from "@/components/tasks/TaskItem";
-import { TaskEditDialog } from "@/components/tasks/TaskEditDialog";
+import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import {
   useTodayTasks,
   useBacklogTasks,
@@ -24,15 +24,9 @@ export function TasksPage() {
   const toggleStatus = useToggleTaskStatus();
   const updateTask = useUpdateTask();
 
-  const [editing, setEditing] = useState<Task | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const { openEdit } = useTaskDialog();
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
   const { data: taggedIds = [] } = useTaggedIds("task", selectedTagId);
-
-  const openEdit = (task: Task) => {
-    setEditing(task);
-    setDialogOpen(true);
-  };
 
   const todayDone = todayTasks.filter((t) => t.status === "done").length;
 
@@ -163,12 +157,6 @@ export function TasksPage() {
           )}
         </div>
       </div>
-
-      <TaskEditDialog
-        task={editing}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
     </div>
   );
 }

@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, ListPlus } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useCreateTask } from "@/hooks/useTasks";
+import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
 import { todayStr } from "@/lib/date";
 
 interface QuickAddTaskProps {
@@ -12,6 +13,7 @@ interface QuickAddTaskProps {
 
 export function QuickAddTask({ defaultToday = true }: QuickAddTaskProps) {
   const createTask = useCreateTask();
+  const { openCreate } = useTaskDialog();
   const [title, setTitle] = useState("");
   const [toToday, setToToday] = useState(defaultToday);
 
@@ -33,7 +35,7 @@ export function QuickAddTask({ defaultToday = true }: QuickAddTaskProps) {
         onKeyDown={(e) => {
           if (e.key === "Enter") handleAdd();
         }}
-        placeholder="快速添加任务，回车创建…"
+        placeholder="快速添加任务，回车创建（按 n 详细新建）…"
         className="flex-1"
       />
       <Button
@@ -50,6 +52,14 @@ export function QuickAddTask({ defaultToday = true }: QuickAddTaskProps) {
         disabled={!title.trim() || createTask.isPending}
       >
         <Plus className="h-4 w-4" />
+      </Button>
+      <Button
+        size="icon"
+        variant="outline"
+        onClick={() => openCreate()}
+        title="详细新建（快捷键 n）"
+      >
+        <ListPlus className="h-4 w-4" />
       </Button>
     </div>
   );

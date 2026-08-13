@@ -40,3 +40,6 @@ coverage/
 # Windows
 Thumbs.db
 desktop.ini
+
+# Claude Code 本地会话/规划文件
+.claude/

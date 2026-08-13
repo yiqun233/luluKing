@@ -60,6 +60,20 @@ const navSections: NavSection[] = [
   },
 ];
 
+// 快捷键角标（与 useGlobalShortcuts 的 ROUTES 顺序对应）
+const SHORTCUT_MAP: Record<string, string> = {
+  "/": "1",
+  "/tasks": "2",
+  "/calendar": "3",
+  "/projects": "4",
+  "/goals": "5",
+  "/habits": "6",
+  "/plan": "7",
+  "/review": "8",
+  "/inbox": "9",
+  "/search": "/",
+};
+
 export function Sidebar() {
   return (
     <aside className="flex w-56 flex-col border-r bg-sidebar text-sidebar-foreground">
@@ -96,7 +110,12 @@ export function Sidebar() {
                   }
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  <span>{item.label}</span>
+                  <span className="flex-1">{item.label}</span>
+                  {SHORTCUT_MAP[item.to] && (
+                    <span className="text-[10px] tabular-nums text-muted-foreground/60">
+                      {SHORTCUT_MAP[item.to]}
+                    </span>
+                  )}
                 </NavLink>
               ))}
             </div>

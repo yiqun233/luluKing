@@ -13,7 +13,11 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ChecklistEditor } from "./ChecklistEditor";
-import { useUpdateTask, useDeleteTask } from "@/hooks/useTasks";
+import {
+  useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
+} from "@/hooks/useTasks";
 import { useProjects } from "@/hooks/useProjects";
 import { useTagsFor, useSetTags } from "@/hooks/useTags";
 import { TagSelector } from "@/components/tags/TagSelector";
@@ -23,16 +27,21 @@ const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 interface TaskEditDialogProps {
-  task: Task | null;
+  task: Task | null; // null = 新建模式
+  /** 新建模式下的默认项目 */
+  presetProjectId?: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
 export function TaskEditDialog({
   task,
+  presetProjectId,
   open,
   onOpenChange,
 }: TaskEditDialogProps) {
+  const isCreate = !task;
+  const createTaskMutation = useCreateTask();
   const updateTaskMutation = useUpdateTask();
   const deleteTaskMutation = useDeleteTask();
   const { data: projects = [] } = useProjects();
@@ -47,7 +56,9 @@ export function TaskEditDialog({
   const setTagsMutation = useSetTags();
   const [tagIds, setTagIds] = useState<number[]>([]);
 
+  // 打开时重置：编辑用 task 值，新建用默认值
   useEffect(() => {
+    if (!open) return;
     if (task) {
       setTitle(task.title);
       setPlanDate(task.plan_date ?? "");
@@ -55,27 +66,39 @@ export function TaskEditDialog({
       setIsKey(task.is_key);
       setProjectId(task.project_id?.toString() ?? "");
       setNotes(task.notes ?? "");
+    } else {
+      setTitle("");
+      setPlanDate("");
+      setDueDate("");
+      setIsKey(0);
+      setProjectId(presetProjectId?.toString() ?? "");
+      setNotes("");
     }
-  }, [task]);
+  }, [open, task, presetProjectId]);
 
   useEffect(() => {
     setTagIds(taskTags?.map((t) => t.id) ?? []);
   }, [taskTags]);
 
   const handleSave = () => {
-    if (!task) return;
-    updateTaskMutation.mutate({
-      id: task.id,
-      input: {
-        title,
-        plan_date: planDate || null,
-        due_date: dueDate || null,
-        is_key: isKey,
-        project_id: projectId ? Number(projectId) : null,
-        notes: notes || null,
-      },
-    });
-    setTagsMutation.mutate({ type: "task", id: task.id, tagIds });
+    if (!title.trim()) return;
+    const input = {
+      title,
+      plan_date: planDate || null,
+      due_date: dueDate || null,
+      is_key: isKey,
+      project_id: projectId ? Number(projectId) : null,
+      notes: notes || null,
+    };
+    if (isCreate) {
+      createTaskMutation.mutate(input, {
+        onSuccess: (t) =>
+          setTagsMutation.mutate({ type: "task", id: t.id, tagIds }),
+      });
+    } else {
+      updateTaskMutation.mutate({ id: task!.id, input });
+      setTagsMutation.mutate({ type: "task", id: task!.id, tagIds });
+    }
     onOpenChange(false);
   };
 
@@ -85,11 +108,14 @@ export function TaskEditDialog({
     onOpenChange(false);
   };
 
+  const pending =
+    createTaskMutation.isPending || updateTaskMutation.isPending;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>编辑任务</DialogTitle>
+          <DialogTitle>{isCreate ? "新建任务" : "编辑任务"}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -102,6 +128,8 @@ export function TaskEditDialog({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handleSave();
               }}
+              placeholder="任务标题"
+              autoFocus
             />
           </div>
 
@@ -174,23 +202,24 @@ export function TaskEditDialog({
         </div>
 
         <DialogFooter className="sm:justify-between">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={deleteTaskMutation.isPending}
-          >
-            <Trash2 className="h-4 w-4" />
-            删除
-          </Button>
+          {!isCreate ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={deleteTaskMutation.isPending}
+            >
+              <Trash2 className="h-4 w-4" />
+              删除
+            </Button>
+          ) : (
+            <span />
+          )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button
-              onClick={handleSave}
-              disabled={updateTaskMutation.isPending}
-            >
+            <Button onClick={handleSave} disabled={pending || !title.trim()}>
               保存
             </Button>
           </div>
