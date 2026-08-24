@@ -700,7 +700,6 @@ async fn restore_data(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::Executor;
 
     fn empty_backup() -> String {
         r#"{
