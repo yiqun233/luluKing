@@ -8,7 +8,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const BACKUP_FORMAT: &str = "luluKing-backup";
 const BACKUP_FORMAT_VERSION: u64 = 1;
-const DATABASE_VERSION: i64 = 2;
+const DATABASE_VERSION: i64 = 4;
 
 const TASKS_COLUMNS: &[&str] = &[
     "id",
@@ -706,7 +706,7 @@ mod tests {
           "format":"luluKing-backup",
           "formatVersion":1,
           "appVersion":"0.1.0",
-          "databaseVersion":2,
+          "databaseVersion":4,
           "exportedAt":"2026-08-13T08:00:00.000Z",
           "attachmentPolicy":"excluded",
           "data":{
@@ -744,6 +744,18 @@ mod tests {
     async fn memory_connection() -> SqliteConnection {
         let mut connection = SqliteConnection::connect("sqlite::memory:").await.unwrap();
         sqlx::raw_sql(include_str!("../migrations/001_initial.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!("../migrations/002_migration_baseline.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!("../migrations/003_search_indexes.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
+        sqlx::raw_sql(include_str!("../migrations/004_search_fts.sql"))
             .execute(&mut connection)
             .await
             .unwrap();
@@ -799,6 +811,31 @@ mod tests {
                 .get("name");
 
             assert_eq!(subject_name, "保留主题");
+        });
+    }
+
+    #[test]
+    fn indexes_restored_tasks_for_full_text_search() {
+        tauri::async_runtime::block_on(async {
+            let mut connection = memory_connection().await;
+            let raw = empty_backup().replace(
+                "\"tasks\":[]",
+                "\"tasks\":[{\"id\":1,\"title\":\"恢复搜索任务\",\"status\":\"todo\",\"plan_date\":null,\"due_date\":null,\"is_key\":0,\"project_id\":null,\"notes\":null,\"created_at\":\"2026-08-24 08:00:00\",\"updated_at\":\"2026-08-24 08:00:00\",\"deleted_at\":null,\"synced_at\":null}]",
+            );
+            let document: BackupDocument = serde_json::from_str(&raw).unwrap();
+            validate_document(&document).unwrap();
+
+            restore_data(&mut connection, &document).await.unwrap();
+            let indexed_count: i64 = sqlx::query(
+                "SELECT COUNT(*) AS count FROM search_fts WHERE entity_type = 'task' AND search_fts MATCH ?",
+            )
+            .bind("恢复搜索*")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap()
+            .get("count");
+
+            assert_eq!(indexed_count, 1);
         });
     }
 }

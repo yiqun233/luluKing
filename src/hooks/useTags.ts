@@ -5,12 +5,15 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getTags,
+  getTagsForManagement,
   getTagsFor,
   getTaggedIds,
   createTag,
   updateTag,
   deleteTag,
   setTags,
+  getTagSlice,
+  mergeTags,
   type CreateTagInput,
   type UpdateTagInput,
 } from "@/repositories/tagRepo";
@@ -22,10 +25,16 @@ export const tagKeys = {
     ["tags", "for", type, id] as const,
   tagged: (type: TaggableType, tagId: number) =>
     ["tags", "tagged", type, tagId] as const,
+  management: () => ["tags", "management"] as const,
+  slice: (tagId: number) => ["tags", "slice", tagId] as const,
 };
 
 export function useTags() {
   return useQuery({ queryKey: tagKeys.all, queryFn: getTags });
+}
+
+export function useTagsForManagement() {
+  return useQuery({ queryKey: tagKeys.management(), queryFn: getTagsForManagement });
 }
 
 export function useTagsFor(type: TaggableType, id: number | null) {
@@ -41,6 +50,14 @@ export function useTaggedIds(type: TaggableType, tagId: number | null) {
   return useQuery({
     queryKey: tagKeys.tagged(type, tagId ?? 0),
     queryFn: () => getTaggedIds(type, tagId!),
+    enabled: tagId != null,
+  });
+}
+
+export function useTagSlice(tagId: number | null) {
+  return useQuery({
+    queryKey: tagKeys.slice(tagId ?? 0),
+    queryFn: () => getTagSlice(tagId!),
     enabled: tagId != null,
   });
 }
@@ -66,6 +83,15 @@ export function useDeleteTag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => deleteTag(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: tagKeys.all }),
+  });
+}
+
+export function useMergeTags() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ sourceTagId, targetTagId }: { sourceTagId: number; targetTagId: number }) =>
+      mergeTags(sourceTagId, targetTagId),
     onSuccess: () => qc.invalidateQueries({ queryKey: tagKeys.all }),
   });
 }

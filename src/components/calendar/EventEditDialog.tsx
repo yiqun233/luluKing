@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useUpdateEvent, useDeleteEvent } from "@/hooks/useEvents";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { CalendarEvent } from "@/types/entities";
 
 interface EventEditDialogProps {
@@ -26,11 +28,14 @@ export function EventEditDialog({
 }: EventEditDialogProps) {
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
+  const { data: eventTags } = useTagsFor("event", event?.id ?? null);
+  const setTagsMutation = useSetTags();
 
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (event) {
@@ -41,18 +46,29 @@ export function EventEditDialog({
     }
   }, [event]);
 
+  useEffect(() => {
+    setTagIds(eventTags?.map((tag) => tag.id) ?? []);
+  }, [eventTags]);
+
   const handleSave = () => {
     if (!event) return;
-    updateEvent.mutate({
-      id: event.id,
-      input: {
-        title,
-        date,
-        start_time: startTime || null,
-        end_time: endTime || null,
+    updateEvent.mutate(
+      {
+        id: event.id,
+        input: {
+          title,
+          date,
+          start_time: startTime || null,
+          end_time: endTime || null,
+        },
       },
-    });
-    onOpenChange(false);
+      {
+        onSuccess: () => {
+          setTagsMutation.mutate({ type: "event", id: event.id, tagIds });
+          onOpenChange(false);
+        },
+      }
+    );
   };
 
   const handleDelete = () => {
@@ -104,6 +120,10 @@ export function EventEditDialog({
                 onChange={(e) => setEndTime(e.target.value)}
               />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
           </div>
         </div>
         <DialogFooter className="sm:justify-between">

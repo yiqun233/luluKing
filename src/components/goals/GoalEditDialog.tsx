@@ -16,6 +16,8 @@ import {
   useUpdateGoal,
   useDeleteGoal,
 } from "@/hooks/useGoals";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type {
   Goal,
   GoalPeriodType,
@@ -41,6 +43,8 @@ export function GoalEditDialog({
   const createGoal = useCreateGoal();
   const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
+  const { data: goalTags } = useTagsFor("goal", goal?.id ?? null);
+  const setTagsMutation = useSetTags();
 
   const [title, setTitle] = useState("");
   const [periodType, setPeriodType] = useState<GoalPeriodType>("quarter");
@@ -50,6 +54,7 @@ export function GoalEditDialog({
   const [progressCurrent, setProgressCurrent] = useState("0");
   const [status, setStatus] = useState<GoalStatus>("active");
   const [notes, setNotes] = useState("");
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   // 打开时根据 goal 重置（新建用默认值，编辑用目标值）
   useEffect(() => {
@@ -65,6 +70,10 @@ export function GoalEditDialog({
     }
   }, [open, goal]);
 
+  useEffect(() => {
+    setTagIds(goalTags?.map((tag) => tag.id) ?? []);
+  }, [goalTags]);
+
   const handleSave = () => {
     const payload = {
       title,
@@ -77,11 +86,23 @@ export function GoalEditDialog({
       notes: notes || null,
     };
     if (isCreate) {
-      createGoal.mutate(payload);
+      createGoal.mutate(payload, {
+        onSuccess: (createdGoal) => {
+          setTagsMutation.mutate({ type: "goal", id: createdGoal.id, tagIds });
+          onOpenChange(false);
+        },
+      });
     } else {
-      updateGoal.mutate({ id: goal!.id, input: payload });
+      updateGoal.mutate(
+        { id: goal!.id, input: payload },
+        {
+          onSuccess: () => {
+            setTagsMutation.mutate({ type: "goal", id: goal!.id, tagIds });
+            onOpenChange(false);
+          },
+        }
+      );
     }
-    onOpenChange(false);
   };
 
   const handleDelete = () => {
@@ -195,6 +216,10 @@ export function GoalEditDialog({
               rows={3}
               placeholder="目标说明…"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
           </div>
         </div>
         <DialogFooter className="sm:justify-between">

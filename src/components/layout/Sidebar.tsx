@@ -11,6 +11,7 @@ import {
   Inbox,
   BookOpen,
   Search,
+  Tags,
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -57,7 +58,10 @@ const navSections: NavSection[] = [
   },
   {
     title: "",
-    items: [{ to: "/search", label: "搜索", icon: Search }],
+    items: [
+      { to: "/search", label: "搜索", icon: Search },
+      { to: "/tags", label: "标签", icon: Tags },
+    ],
   },
 ];
 

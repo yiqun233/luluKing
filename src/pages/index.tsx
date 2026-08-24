@@ -10,3 +10,4 @@ export { KnowledgePage } from "./KnowledgePage";
 export { ReviewPage } from "./ReviewPage";
 export { SearchPage } from "./SearchPage";
 export { SettingsPage } from "./SettingsPage";
+export { TagsPage } from "./TagsPage";

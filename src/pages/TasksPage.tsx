@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CheckCircle2, Circle, AlertCircle, Tag as TagIcon } from "lucide-react";
 import { QuickAddTask } from "@/components/tasks/QuickAddTask";
 import { TaskItem } from "@/components/tasks/TaskItem";
@@ -15,12 +16,15 @@ import {
   useOverdueTasks,
   useToggleTaskStatus,
   useUpdateTask,
+  useTaskById,
 } from "@/hooks/useTasks";
 import { useTags, useTaggedIds } from "@/hooks/useTags";
 import { todayStr } from "@/lib/date";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 import type { Task } from "@/types/entities";
 
 export function TasksPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const today = todayStr();
   const todayTasksQuery = useTodayTasks(today);
   const backlogQuery = useBacklogTasks();
@@ -36,8 +40,24 @@ export function TasksPage() {
 
   const { openEdit } = useTaskDialog();
   const [selectedTagId, setSelectedTagId] = useState<number | null>(null);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
+  const searchTagId = getPositiveSearchParam(searchParams.get("tag"));
+  const searchTaskQuery = useTaskById(searchOpenId);
   const taggedIdsQuery = useTaggedIds("task", selectedTagId);
   const { data: taggedIds = [] } = taggedIdsQuery;
+
+  useEffect(() => {
+    if (searchTagId != null) setSelectedTagId(searchTagId);
+  }, [searchTagId]);
+
+  useEffect(() => {
+    if (!searchTaskQuery.data || searchOpenId == null) return;
+    openEdit(searchTaskQuery.data);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [openEdit, searchOpenId, searchTaskQuery.data, setSearchParams]);
 
   // 批量选择
   const [selectedIds, setSelectedIds] = useState<number[]>([]);

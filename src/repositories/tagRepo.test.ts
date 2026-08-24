@@ -5,15 +5,20 @@ vi.mock("@/db/client", () => ({
   select: vi.fn(),
   selectOne: vi.fn(),
 }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { execute, select, selectOne } from "@/db/client";
+import { invoke } from "@tauri-apps/api/core";
 import {
   createTag,
   updateTag,
   deleteTag,
   getTags,
+  getTagsForManagement,
   getTagsFor,
   getTaggedIds,
+  getTagSlice,
+  mergeTags,
   setTags,
 } from "@/repositories/tagRepo";
 import type { Tag } from "@/types/entities";
@@ -21,6 +26,7 @@ import type { Tag } from "@/types/entities";
 const mockExecute = vi.mocked(execute);
 const mockSelect = vi.mocked(select);
 const mockSelectOne = vi.mocked(selectOne);
+const mockInvoke = vi.mocked(invoke);
 
 const makeTag = (over: Partial<Tag> = {}): Tag => ({
   id: 1,
@@ -95,6 +101,14 @@ describe("查询函数", () => {
     );
   });
 
+  it("getTagsForManagement 包含归档标签", async () => {
+    mockSelect.mockResolvedValue([]);
+    await getTagsForManagement();
+    expect(mockSelect).toHaveBeenCalledWith(
+      expect.stringContaining("CASE status WHEN 'active' THEN 0 ELSE 1 END")
+    );
+  });
+
   it("getTagsFor JOIN taggables", async () => {
     mockSelect.mockResolvedValue([]);
     await getTagsFor("task", 5);
@@ -108,6 +122,39 @@ describe("查询函数", () => {
     mockSelect.mockResolvedValue([{ taggable_id: 10 }, { taggable_id: 20 }]);
     const result = await getTaggedIds("task", 1);
     expect(result).toEqual([10, 20]);
+  });
+
+  it("getTagSlice 并行读取七类关联实体", async () => {
+    mockSelect
+      .mockResolvedValueOnce([{ id: 1, title: "任务", status: "todo" }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+
+    const items = await getTagSlice(9);
+
+    expect(mockSelect).toHaveBeenCalledTimes(7);
+    expect(mockSelect.mock.calls[0][0]).toContain("tg.taggable_type = 'task'");
+    expect(mockSelect.mock.calls[0][1]).toEqual([9]);
+    expect(items).toEqual([
+      { type: "task", id: 1, title: "任务", subtitle: "任务" },
+    ]);
+  });
+});
+
+describe("mergeTags", () => {
+  it("调用 Rust 事务命令", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+
+    await mergeTags(1, 2);
+
+    expect(mockInvoke).toHaveBeenCalledWith("merge_tags", {
+      sourceTagId: 1,
+      targetTagId: 2,
+    });
   });
 });
 

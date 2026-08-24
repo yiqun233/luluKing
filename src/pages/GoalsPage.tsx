@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   Target,
   Plus,
@@ -17,6 +18,7 @@ import { useProjects } from "@/hooks/useProjects";
 import { useHabits } from "@/hooks/useHabits";
 import { useTaskStatsByGoal } from "@/hooks/useTasks";
 import type { Goal, GoalPeriodType, Project, Habit } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 const periodLabels: Record<GoalPeriodType, string> = {
   quarter: "季度目标",
@@ -222,6 +224,7 @@ function GoalCard({
 }
 
 export function GoalsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: goals = [] } = useGoals();
   const { data: allProjects = [] } = useProjects();
   const { data: allHabits = [] } = useHabits();
@@ -230,6 +233,7 @@ export function GoalsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [projectGoalId, setProjectGoalId] = useState<number | null>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
 
   const openCreate = () => {
     setEditing(null);
@@ -243,6 +247,17 @@ export function GoalsPage() {
     setProjectGoalId(goalId);
     setProjectDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const goal = goals.find((item) => item.id === searchOpenId);
+    if (!goal) return;
+    openEdit(goal);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [goals, searchOpenId, setSearchParams]);
 
   // 按 period_type 分组
   const groups: Record<GoalPeriodType, Goal[]> = {

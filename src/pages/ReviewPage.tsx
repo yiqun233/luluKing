@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { NotebookPen, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ReviewEditDialog } from "@/components/reviews/ReviewEditDialog";
 import { useReviewsByType } from "@/hooks/useReviews";
 import type { Review, ReviewType } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 const statusLabels: Record<string, string> = {
   draft: "草稿",
@@ -26,11 +28,14 @@ function periodLabel(review: Review): string {
 }
 
 export function ReviewPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<ReviewType>("week");
   const { data: reviews = [] } = useReviewsByType(tab);
 
   const [editing, setEditing] = useState<Review | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
+  const searchReviewType = searchParams.get("type");
 
   const openCreate = () => {
     setEditing(null);
@@ -40,6 +45,23 @@ export function ReviewPage() {
     setEditing(review);
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (searchReviewType === "week" || searchReviewType === "month") {
+      setTab(searchReviewType);
+    }
+  }, [searchReviewType]);
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const review = reviews.find((item) => item.id === searchOpenId);
+    if (!review) return;
+    openEdit(review);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [reviews, searchOpenId, setSearchParams]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

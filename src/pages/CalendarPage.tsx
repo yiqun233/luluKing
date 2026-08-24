@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { format, addDays, startOfWeek } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -10,12 +11,16 @@ import { useTodayEvents, useEventsByDateRange } from "@/hooks/useEvents";
 import { todayStr } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import type { CalendarEvent } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 export function CalendarPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<"day" | "week">("day");
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
+  const searchDate = searchParams.get("date");
 
   const openEdit = (event: CalendarEvent) => {
     setEditing(event);
@@ -40,6 +45,24 @@ export function CalendarPage() {
     "yyyy-MM-dd"
   );
   const { data: weekEvents = [] } = useEventsByDateRange(weekStart, weekEnd);
+
+  useEffect(() => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(searchDate ?? "")) {
+      setSelectedDate(searchDate!);
+      setView("day");
+    }
+  }, [searchDate]);
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const event = dayEvents.find((item) => item.id === searchOpenId);
+    if (!event) return;
+    openEdit(event);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [dayEvents, searchOpenId, setSearchParams]);
 
   const weekDays = Array.from({ length: 7 }, (_, i) =>
     format(addDays(new Date(weekStart + "T00:00:00"), i), "yyyy-MM-dd")

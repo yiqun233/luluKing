@@ -63,8 +63,8 @@ AI 设置文件保存在同一应用数据根目录；JSON 备份保存在 `%APP
 - 构建命令：`npm run release:windows`
 - 构建结果：通过；前端生产构建与 Rust Release 构建均完成。
 - 安装包：`src-tauri/target/release/bundle/nsis/luluKing_0.1.0_x64-setup.exe`
-- 安装包大小：5,368,635 字节。
-- SHA-256：`A8D7A4D5536B575660F471404B8E014DC1BC5FF0B94ABB764FC90DA1B2D42984`
+- 安装包大小：5,373,124 字节（2026-08-24 R1.1 FTS5 迁移版本）。
+- SHA-256：`13E552F902CB0A72DEB21472B30A359DEE8CC612118EC76F91B76DF06C5056D2`
 - 文件版本：`0.1.0`。
 - 签名状态：未签名（`NotSigned`）。
 - 首次构建时需要下载 NSIS 3.11；已缓存到 `src-tauri/target/.tauri/NSIS/`，后续同一工作区可离线复用。

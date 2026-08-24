@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, ListTodo, BookMarked, Trash2, Inbox as InboxIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,8 +7,10 @@ import { UpgradeNoteDialog } from "@/components/inbox/UpgradeNoteDialog";
 import { useInboxNotes, useCreateNote, useDeleteNote } from "@/hooks/useNotes";
 import { useCreateTask } from "@/hooks/useTasks";
 import type { Note } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 export function InboxPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: notes = [] } = useInboxNotes();
   const createNote = useCreateNote();
   const deleteNote = useDeleteNote();
@@ -16,6 +19,7 @@ export function InboxPage() {
   const [draft, setDraft] = useState("");
   const [upgrading, setUpgrading] = useState<Note | null>(null);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
 
   const handleQuickAdd = () => {
     if (!draft.trim()) return;
@@ -36,6 +40,17 @@ export function InboxPage() {
   const handleDelete = (note: Note) => {
     deleteNote.mutate(note.id);
   };
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const note = notes.find((item) => item.id === searchOpenId);
+    if (!note) return;
+    handleUpgrade(note);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [notes, searchOpenId, setSearchParams]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

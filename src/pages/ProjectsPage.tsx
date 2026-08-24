@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { FolderKanban, Plus, Star, BookOpen, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ import {
   useUpdateTask,
 } from "@/hooks/useTasks";
 import type { Project, ProjectType } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 const statusLabels: Record<string, string> = {
   inactive: "未启动",
@@ -140,6 +142,7 @@ function ProjectCard({
 }
 
 export function ProjectsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: projects = [] } = useProjects();
   const { data: goals = [] } = useGoals();
   const toggleFocus = useToggleProjectFocus();
@@ -147,6 +150,7 @@ export function ProjectsPage() {
   const [editing, setEditing] = useState<Project | null>(null);
   const [createType, setCreateType] = useState<ProjectType>("delivery");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
 
   const goalMap = new Map(goals.map((g) => [g.id, g.title]));
 
@@ -162,6 +166,17 @@ export function ProjectsPage() {
   const handleToggleFocus = (project: Project) => {
     toggleFocus.mutate({ id: project.id, isFocus: project.is_focus ? 0 : 1 });
   };
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const project = projects.find((item) => item.id === searchOpenId);
+    if (!project) return;
+    openEdit(project);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [projects, searchOpenId, setSearchParams]);
 
   const delivery = projects.filter((p) => p.type === "delivery");
   const study = projects.filter((p) => p.type === "study");

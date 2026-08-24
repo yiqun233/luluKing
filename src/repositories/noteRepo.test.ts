@@ -5,8 +5,10 @@ vi.mock("@/db/client", () => ({
   select: vi.fn(),
   selectOne: vi.fn(),
 }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { execute, select, selectOne } from "@/db/client";
+import { invoke } from "@tauri-apps/api/core";
 import {
   createNote,
   updateNote,
@@ -14,12 +16,17 @@ import {
   getInboxNotes,
   getKnowledgeNotes,
   getNotesBySubject,
+  getNotesForLinking,
+  getNoteLinksFrom,
+  getNoteLinksTo,
+  saveKnowledgeNoteWithLinks,
 } from "@/repositories/noteRepo";
 import type { Note } from "@/types/entities";
 
 const mockExecute = vi.mocked(execute);
 const mockSelect = vi.mocked(select);
 const mockSelectOne = vi.mocked(selectOne);
+const mockInvoke = vi.mocked(invoke);
 
 const makeNote = (over: Partial<Note> = {}): Note => ({
   id: 1,
@@ -139,5 +146,54 @@ describe("查询函数", () => {
       expect.stringContaining("subject_id = ?"),
       [4]
     );
+  });
+
+  it("getNotesForLinking 仅查询活动知识笔记", async () => {
+    mockSelect.mockResolvedValue([]);
+    await getNotesForLinking();
+    expect(mockSelect).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'knowledge'")
+    );
+  });
+
+  it("getNoteLinksFrom 保留失效链接状态", async () => {
+    mockSelect.mockResolvedValue([
+      { note_id: 2, title: null, link_text: "[[旧笔记]]", available: 0 },
+    ]);
+    await expect(getNoteLinksFrom(1)).resolves.toEqual([
+      {
+        noteId: 2,
+        title: null,
+        linkText: "[[旧笔记]]",
+        available: false,
+      },
+    ]);
+  });
+
+  it("getNoteLinksTo 查询活动来源笔记", async () => {
+    mockSelect.mockResolvedValue([
+      { note_id: 3, title: "来源", link_text: "[[目标]]" },
+    ]);
+    await expect(getNoteLinksTo(2)).resolves.toEqual([
+      { noteId: 3, title: "来源", linkText: "[[目标]]", available: true },
+    ]);
+  });
+});
+
+describe("saveKnowledgeNoteWithLinks", () => {
+  it("调用 Rust 事务保存并回查笔记", async () => {
+    const input = {
+      title: "来源",
+      content: "[[目标]]",
+      subjectId: null,
+      links: [{ targetNoteId: 2, linkText: "[[目标]]" }],
+    };
+    mockInvoke.mockResolvedValue({ id: 4 });
+    mockSelectOne.mockResolvedValue(makeNote({ id: 4, title: "来源", status: "knowledge" }));
+
+    const note = await saveKnowledgeNoteWithLinks(input);
+
+    expect(mockInvoke).toHaveBeenCalledWith("save_knowledge_note", { input });
+    expect(note.id).toBe(4);
   });
 });

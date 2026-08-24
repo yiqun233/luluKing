@@ -18,6 +18,8 @@ import {
   useDeleteProject,
 } from "@/hooks/useProjects";
 import { useActiveGoals } from "@/hooks/useGoals";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { Project, ProjectType, ProjectStatus } from "@/types/entities";
 
 const selectClass =
@@ -52,6 +54,8 @@ export function ProjectEditDialog({
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
   const { data: goals = [] } = useActiveGoals();
+  const { data: projectTags } = useTagsFor("project", project?.id ?? null);
+  const setTagsMutation = useSetTags();
 
   const [title, setTitle] = useState("");
   const [type, setType] = useState<ProjectType>(defaultType);
@@ -59,6 +63,7 @@ export function ProjectEditDialog({
   const [status, setStatus] = useState<ProjectStatus>("active");
   const [isFocus, setIsFocus] = useState(false);
   const [notes, setNotes] = useState("");
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -73,28 +78,47 @@ export function ProjectEditDialog({
     }
   }, [open, project, defaultType, defaultGoalId]);
 
+  useEffect(() => {
+    setTagIds(projectTags?.map((tag) => tag.id) ?? []);
+  }, [projectTags]);
+
   const handleSave = () => {
     if (isCreate) {
-      createProject.mutate({
-        title,
-        type,
-        goal_id: goalId ? Number(goalId) : null,
-        notes: notes || null,
-      });
-    } else {
-      updateProject.mutate({
-        id: project!.id,
-        input: {
+      createProject.mutate(
+        {
           title,
           type,
           goal_id: goalId ? Number(goalId) : null,
-          status,
-          is_focus: isFocus ? 1 : 0,
           notes: notes || null,
         },
-      });
+        {
+          onSuccess: (createdProject) => {
+            setTagsMutation.mutate({ type: "project", id: createdProject.id, tagIds });
+            onOpenChange(false);
+          },
+        }
+      );
+    } else {
+      updateProject.mutate(
+        {
+          id: project!.id,
+          input: {
+            title,
+            type,
+            goal_id: goalId ? Number(goalId) : null,
+            status,
+            is_focus: isFocus ? 1 : 0,
+            notes: notes || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            setTagsMutation.mutate({ type: "project", id: project!.id, tagIds });
+            onOpenChange(false);
+          },
+        }
+      );
     }
-    onOpenChange(false);
   };
 
   const handleDelete = () => {
@@ -190,6 +214,10 @@ export function ProjectEditDialog({
               rows={3}
               placeholder="项目说明…"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
           </div>
         </div>
         <DialogFooter className="sm:justify-between">

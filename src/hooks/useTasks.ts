@@ -9,6 +9,7 @@ import {
   getActiveTasks,
   getOverdueTasks,
   getTasksByProject,
+  getTaskById,
   getTaskStatsByGoal,
   getChecklistItems,
   createTask,
@@ -78,6 +79,14 @@ export function useTasksByProject(projectId: number | null) {
     queryKey: taskKeys.byProject(projectId ?? 0),
     queryFn: () => getTasksByProject(projectId!),
     enabled: projectId != null,
+  });
+}
+
+export function useTaskById(taskId: number | null) {
+  return useQuery({
+    queryKey: ["tasks", "detail", taskId ?? 0],
+    queryFn: () => getTaskById(taskId!),
+    enabled: taskId != null,
   });
 }
 

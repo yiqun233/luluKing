@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BookOpen, Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,8 +7,10 @@ import { NoteEditDialog } from "@/components/knowledge/NoteEditDialog";
 import { useSubjects, useCreateSubject } from "@/hooks/useSubjects";
 import { useKnowledgeNotes, useNotesBySubject } from "@/hooks/useNotes";
 import type { Note } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 export function KnowledgePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: subjects = [] } = useSubjects();
   const { data: allNotes = [] } = useKnowledgeNotes();
   const createSubject = useCreateSubject();
@@ -21,6 +24,7 @@ export function KnowledgePage() {
 
   const [editing, setEditing] = useState<Note | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
 
   const handleAddSubject = () => {
     if (!newSubjectName.trim()) return;
@@ -37,6 +41,17 @@ export function KnowledgePage() {
     setEditing(note);
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const note = allNotes.find((item) => item.id === searchOpenId);
+    if (!note) return;
+    openEdit(note);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [allNotes, searchOpenId, setSearchParams]);
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">

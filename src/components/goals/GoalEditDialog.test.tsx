@@ -8,6 +8,13 @@ vi.mock("@/hooks/useGoals", () => ({
   useDeleteGoal: vi.fn(),
   useActiveGoals: vi.fn(),
 }));
+vi.mock("@/hooks/useTags", () => ({
+  useTagsFor: vi.fn(),
+  useSetTags: vi.fn(),
+}));
+vi.mock("@/components/tags/TagSelector", () => ({
+  TagSelector: () => <div>标签选择器</div>,
+}));
 
 import {
   useCreateGoal,
@@ -16,12 +23,15 @@ import {
   useActiveGoals,
 } from "@/hooks/useGoals";
 import { GoalEditDialog } from "@/components/goals/GoalEditDialog";
+import { useSetTags, useTagsFor } from "@/hooks/useTags";
 import type { Goal } from "@/types/entities";
 
 const mockCreate = vi.mocked(useCreateGoal);
 const mockUpdate = vi.mocked(useUpdateGoal);
 const mockDelete = vi.mocked(useDeleteGoal);
 const mockActiveGoals = vi.mocked(useActiveGoals);
+const mockUseTagsFor = vi.mocked(useTagsFor);
+const mockUseSetTags = vi.mocked(useSetTags);
 
 const makeGoal = (over: Partial<Goal> = {}): Goal => ({
   id: 1,
@@ -46,6 +56,8 @@ beforeEach(() => {
   mockUpdate.mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   mockDelete.mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   mockActiveGoals.mockReturnValue({ data: [] } as never);
+  mockUseTagsFor.mockReturnValue({ data: [] } as never);
+  mockUseSetTags.mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
 });
 
 describe("GoalEditDialog", () => {
@@ -65,7 +77,8 @@ describe("GoalEditDialog", () => {
         title: "读3本书",
         period_type: "quarter",
         progress_type: "count",
-      })
+      }),
+      expect.any(Object)
     );
   });
 
@@ -95,10 +108,13 @@ describe("GoalEditDialog", () => {
     await user.type(titleInput, "新标题");
     await user.click(screen.getByRole("button", { name: "保存" }));
 
-    expect(mutate).toHaveBeenCalledWith({
-      id: 2,
-      input: expect.objectContaining({ title: "新标题" }),
-    });
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        id: 2,
+        input: expect.objectContaining({ title: "新标题" }),
+      },
+      expect.any(Object)
+    );
   });
 
   it("编辑模式：点删除调用 deleteGoal", async () => {

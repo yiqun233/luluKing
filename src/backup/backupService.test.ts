@@ -47,7 +47,7 @@ const backupJson = JSON.stringify({
   format: BACKUP_FORMAT,
   formatVersion: BACKUP_FORMAT_VERSION,
   appVersion: "0.1.0",
-  databaseVersion: 2,
+  databaseVersion: 4,
   exportedAt: "2026-08-13T08:00:00.000Z",
   attachmentPolicy: "excluded",
   data: {

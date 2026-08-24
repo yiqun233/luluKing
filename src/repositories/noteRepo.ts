@@ -3,6 +3,8 @@
 // ============================================================
 
 import { execute, select, selectOne } from "@/db/client";
+import { invoke } from "@tauri-apps/api/core";
+import type { LinkableNote, ResolvedNoteLink } from "@/lib/noteLinks";
 import type { Note, NoteStatus, NoteSource } from "@/types/entities";
 
 export interface CreateNoteInput {
@@ -20,6 +22,21 @@ export interface UpdateNoteInput {
   subject_id?: number | null;
   related_goal_id?: number | null;
   related_project_id?: number | null;
+}
+
+export interface NoteLinkReference {
+  noteId: number;
+  title: string | null;
+  linkText: string;
+  available: boolean;
+}
+
+export interface SaveKnowledgeNoteInput {
+  id?: number;
+  title: string | null;
+  content: string;
+  subjectId: number | null;
+  links: ResolvedNoteLink[];
 }
 
 export async function getInboxNotes(): Promise<Note[]> {
@@ -54,6 +71,65 @@ export async function getNoteById(id: number): Promise<Note | null> {
     `SELECT * FROM notes WHERE id = ? AND deleted_at IS NULL`,
     [id]
   );
+}
+
+export async function getNotesForLinking(): Promise<LinkableNote[]> {
+  return select<LinkableNote>(
+    `SELECT id, title FROM notes
+     WHERE status = 'knowledge' AND title IS NOT NULL AND title != '' AND deleted_at IS NULL
+     ORDER BY title, id`
+  );
+}
+
+export async function getNoteLinksFrom(noteId: number): Promise<NoteLinkReference[]> {
+  const rows = await select<{
+    note_id: number;
+    title: string | null;
+    link_text: string;
+    available: number;
+  }>(
+    `SELECT nl.target_note_id AS note_id, target.title, nl.link_text,
+            CASE WHEN target.id IS NOT NULL AND target.deleted_at IS NULL THEN 1 ELSE 0 END AS available
+     FROM note_links nl
+     LEFT JOIN notes target ON target.id = nl.target_note_id
+     WHERE nl.source_note_id = ?
+     ORDER BY nl.id`,
+    [noteId]
+  );
+  return rows.map((row) => ({
+    noteId: row.note_id,
+    title: row.title,
+    linkText: row.link_text,
+    available: row.available === 1,
+  }));
+}
+
+export async function getNoteLinksTo(noteId: number): Promise<NoteLinkReference[]> {
+  const rows = await select<{
+    note_id: number;
+    title: string | null;
+    link_text: string;
+  }>(
+    `SELECT source.id AS note_id, source.title, nl.link_text
+     FROM note_links nl
+     JOIN notes source ON source.id = nl.source_note_id
+     WHERE nl.target_note_id = ? AND source.deleted_at IS NULL
+     ORDER BY source.updated_at DESC`,
+    [noteId]
+  );
+  return rows.map((row) => ({
+    noteId: row.note_id,
+    title: row.title,
+    linkText: row.link_text,
+    available: true,
+  }));
+}
+
+export async function saveKnowledgeNoteWithLinks(
+  input: SaveKnowledgeNoteInput
+): Promise<Note> {
+  const result = await invoke<{ id: number }>("save_knowledge_note", { input });
+  return (await getNoteById(result.id))!;
 }
 
 export async function createNote(input: CreateNoteInput): Promise<Note> {

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Flame, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +13,7 @@ import {
 import { computeStreak, computeWeekCount, recentDays } from "@/lib/habit";
 import { todayStr } from "@/lib/date";
 import type { Habit } from "@/types/entities";
+import { getPositiveSearchParam, withoutSearchParam } from "@/lib/searchNavigation";
 
 const statusLabels: Record<string, string> = {
   active: "进行中",
@@ -111,9 +113,11 @@ function HabitCard({
 }
 
 export function HabitsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: habits = [] } = useHabits();
   const [editing, setEditing] = useState<Habit | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const searchOpenId = getPositiveSearchParam(searchParams.get("open"));
 
   const openCreate = () => {
     setEditing(null);
@@ -123,6 +127,17 @@ export function HabitsPage() {
     setEditing(habit);
     setDialogOpen(true);
   };
+
+  useEffect(() => {
+    if (searchOpenId == null) return;
+    const habit = habits.find((item) => item.id === searchOpenId);
+    if (!habit) return;
+    openEdit(habit);
+    setSearchParams(
+      (current) => withoutSearchParam(current, "open"),
+      { replace: true }
+    );
+  }, [habits, searchOpenId, setSearchParams]);
 
   const activeCount = habits.filter((h) => h.status === "active").length;
 

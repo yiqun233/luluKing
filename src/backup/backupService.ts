@@ -12,7 +12,7 @@ import { select } from "@/db/client";
 
 export const BACKUP_FORMAT = "luluKing-backup";
 export const BACKUP_FORMAT_VERSION = 1;
-export const DATABASE_VERSION = 2;
+export const DATABASE_VERSION = 4;
 export const BACKUPS_DIR = "luluKing/backups";
 
 type BackupRow = Record<string, unknown>;

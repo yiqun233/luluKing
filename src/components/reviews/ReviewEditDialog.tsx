@@ -22,6 +22,8 @@ import { generateReviewDraft } from "@/ai/scenarios/reviewDraft";
 import { getAIErrorMessage } from "@/ai/aiClient";
 import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { feedback } from "@/components/feedback/FeedbackProvider";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { Review, ReviewType, ReviewStatus } from "@/types/entities";
 
 const selectClass =
@@ -52,6 +54,8 @@ export function ReviewEditDialog({
   const createReview = useCreateReview();
   const updateReview = useUpdateReview();
   const deleteReview = useDeleteReview();
+  const { data: reviewTags } = useTagsFor("review", review?.id ?? null);
+  const setTagsMutation = useSetTags();
 
   const [type, setType] = useState<ReviewType>(defaultType);
   const [periodStart, setPeriodStart] = useState("");
@@ -64,6 +68,7 @@ export function ReviewEditDialog({
   const [draftError, setDraftError] = useState("");
   const [overwriteConfirmOpen, setOverwriteConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [tagIds, setTagIds] = useState<number[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
 
@@ -105,6 +110,10 @@ export function ReviewEditDialog({
         });
     }
   }, [open, review, defaultType]);
+
+  useEffect(() => {
+    setTagIds(reviewTags?.map((tag) => tag.id) ?? []);
+  }, [reviewTags]);
 
   // 弹窗关闭时中断进行中的 AI 生成
   useEffect(() => {
@@ -178,7 +187,8 @@ export function ReviewEditDialog({
           content: content || null,
         },
         {
-          onSuccess: () => {
+          onSuccess: (createdReview) => {
+            setTagsMutation.mutate({ type: "review", id: createdReview.id, tagIds });
             feedback.success("复盘已保存");
             onOpenChange(false);
           },
@@ -199,6 +209,7 @@ export function ReviewEditDialog({
         },
         {
           onSuccess: () => {
+            setTagsMutation.mutate({ type: "review", id: review!.id, tagIds });
             feedback.success("复盘已保存");
             onOpenChange(false);
           },
@@ -356,6 +367,10 @@ export function ReviewEditDialog({
               </select>
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
+          </div>
         </div>
         <DialogFooter className="sm:justify-between">
           {!isCreate ? (

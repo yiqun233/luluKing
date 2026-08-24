@@ -15,6 +15,7 @@ import {
   KnowledgePage,
   SearchPage,
   SettingsPage,
+  TagsPage,
 } from "@/pages";
 
 function AppShell() {
@@ -36,6 +37,7 @@ function AppShell() {
           <Route path="/knowledge" element={<KnowledgePage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/tags" element={<TagsPage />} />
         </Routes>
       </main>
     </div>

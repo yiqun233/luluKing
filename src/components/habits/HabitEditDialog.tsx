@@ -16,6 +16,8 @@ import {
   useDeleteHabit,
 } from "@/hooks/useHabits";
 import { useActiveGoals } from "@/hooks/useGoals";
+import { useTagsFor, useSetTags } from "@/hooks/useTags";
+import { TagSelector } from "@/components/tags/TagSelector";
 import type { Habit, HabitFrequencyType, HabitStatus } from "@/types/entities";
 
 const selectClass =
@@ -37,6 +39,8 @@ export function HabitEditDialog({
   const updateHabit = useUpdateHabit();
   const deleteHabit = useDeleteHabit();
   const { data: goals } = useActiveGoals();
+  const { data: habitTags } = useTagsFor("habit", habit?.id ?? null);
+  const setTagsMutation = useSetTags();
 
   const [title, setTitle] = useState("");
   const [frequencyType, setFrequencyType] = useState<HabitFrequencyType>(
@@ -45,6 +49,7 @@ export function HabitEditDialog({
   const [frequencyTarget, setFrequencyTarget] = useState("1");
   const [goalId, setGoalId] = useState<string>("");
   const [status, setStatus] = useState<HabitStatus>("active");
+  const [tagIds, setTagIds] = useState<number[]>([]);
 
   // 打开时根据 habit 重置（新建用默认值，编辑用习惯值）
   useEffect(() => {
@@ -57,6 +62,10 @@ export function HabitEditDialog({
     }
   }, [open, habit]);
 
+  useEffect(() => {
+    setTagIds(habitTags?.map((tag) => tag.id) ?? []);
+  }, [habitTags]);
+
   const handleSave = () => {
     const payload = {
       title,
@@ -66,11 +75,23 @@ export function HabitEditDialog({
       goal_id: goalId ? Number(goalId) : null,
     };
     if (isCreate) {
-      createHabit.mutate(payload);
+      createHabit.mutate(payload, {
+        onSuccess: (createdHabit) => {
+          setTagsMutation.mutate({ type: "habit", id: createdHabit.id, tagIds });
+          onOpenChange(false);
+        },
+      });
     } else {
-      updateHabit.mutate({ id: habit!.id, input: { ...payload, status } });
+      updateHabit.mutate(
+        { id: habit!.id, input: { ...payload, status } },
+        {
+          onSuccess: () => {
+            setTagsMutation.mutate({ type: "habit", id: habit!.id, tagIds });
+            onOpenChange(false);
+          },
+        }
+      );
     }
-    onOpenChange(false);
   };
 
   const handleDelete = () => {
@@ -156,6 +177,10 @@ export function HabitEditDialog({
               </select>
             </div>
           )}
+          <div className="space-y-1.5">
+            <Label>标签</Label>
+            <TagSelector value={tagIds} onChange={setTagIds} />
+          </div>
         </div>
         <DialogFooter className="sm:justify-between">
           {!isCreate ? (
