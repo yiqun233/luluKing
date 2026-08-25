@@ -47,7 +47,7 @@ const backupJson = JSON.stringify({
   format: BACKUP_FORMAT,
   formatVersion: BACKUP_FORMAT_VERSION,
   appVersion: "0.1.0",
-  databaseVersion: 4,
+  databaseVersion: 5,
   exportedAt: "2026-08-13T08:00:00.000Z",
   attachmentPolicy: "excluded",
   data: {
@@ -66,6 +66,7 @@ const backupJson = JSON.stringify({
     taggables: [],
     reviews: [],
     plans: [],
+    plan_tasks: [],
   },
 });
 
@@ -86,7 +87,7 @@ describe("createBackup", () => {
   it("导出全部业务表，不读取附件和同步状态", async () => {
     const preview = await createBackup();
 
-    expect(mockSelect).toHaveBeenCalledTimes(15);
+    expect(mockSelect).toHaveBeenCalledTimes(16);
     expect(mockSelect).toHaveBeenCalledWith("SELECT * FROM tasks ORDER BY id");
     expect(mockSelect).toHaveBeenCalledWith(
       "SELECT * FROM taggables ORDER BY tag_id, taggable_type, taggable_id"
@@ -117,6 +118,12 @@ describe("createBackup", () => {
 describe("parseBackup", () => {
   it("接受完整的当前格式", () => {
     expect(parseBackup(backupJson).data.tags).toEqual([]);
+  });
+
+  it("兼容 R1.4 之前没有承诺表的备份", () => {
+    const legacy = JSON.parse(backupJson) as { data: Record<string, unknown> };
+    delete legacy.data.plan_tasks;
+    expect(parseBackup(JSON.stringify(legacy)).data.plan_tasks).toEqual([]);
   });
 
   it.each([
@@ -230,6 +237,7 @@ describe("restoreBackup", () => {
         taggables: 0,
         reviews: 0,
         plans: 0,
+        plan_tasks: 0,
       },
     });
 

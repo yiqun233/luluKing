@@ -8,7 +8,7 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const BACKUP_FORMAT: &str = "luluKing-backup";
 const BACKUP_FORMAT_VERSION: u64 = 1;
-const DATABASE_VERSION: i64 = 4;
+const DATABASE_VERSION: i64 = 5;
 
 const TASKS_COLUMNS: &[&str] = &[
     "id",
@@ -174,6 +174,7 @@ const PLANS_COLUMNS: &[&str] = &[
     "deleted_at",
     "synced_at",
 ];
+const PLAN_TASKS_COLUMNS: &[&str] = &["plan_id", "task_id", "resolution", "resolved_at"];
 
 type BackupRow = Map<String, Value>;
 
@@ -206,6 +207,8 @@ struct BackupData {
     taggables: Vec<BackupRow>,
     reviews: Vec<BackupRow>,
     plans: Vec<BackupRow>,
+    #[serde(default)]
+    plan_tasks: Vec<BackupRow>,
 }
 
 #[derive(Serialize)]
@@ -224,6 +227,7 @@ struct EntityIds {
     tags: HashSet<i64>,
     events: HashSet<i64>,
     reviews: HashSet<i64>,
+    plans: HashSet<i64>,
 }
 
 fn invalid(message: impl Into<String>) -> String {
@@ -375,6 +379,7 @@ fn validate_document(document: &BackupDocument) -> Result<EntityIds, String> {
     validate_row_shape(&data.taggables, TAGGABLES_COLUMNS, "taggables")?;
     validate_row_shape(&data.reviews, REVIEWS_COLUMNS, "reviews")?;
     validate_row_shape(&data.plans, PLANS_COLUMNS, "plans")?;
+    validate_row_shape(&data.plan_tasks, PLAN_TASKS_COLUMNS, "plan_tasks")?;
 
     let ids = EntityIds {
         tasks: collect_ids(&data.tasks, "tasks")?,
@@ -386,13 +391,13 @@ fn validate_document(document: &BackupDocument) -> Result<EntityIds, String> {
         tags: collect_ids(&data.tags, "tags")?,
         events: collect_ids(&data.events, "events")?,
         reviews: collect_ids(&data.reviews, "reviews")?,
+        plans: collect_ids(&data.plans, "plans")?,
     };
     collect_ids(&data.checklist_items, "checklist_items")?;
     collect_ids(&data.materials, "materials")?;
     collect_ids(&data.habit_logs, "habit_logs")?;
     collect_ids(&data.note_links, "note_links")?;
     collect_ids(&data.subjects, "subjects")?;
-    collect_ids(&data.plans, "plans")?;
 
     for (index, row) in data.tasks.iter().enumerate() {
         let label = format!("tasks[{index}]");
@@ -514,6 +519,28 @@ fn validate_document(document: &BackupDocument) -> Result<EntityIds, String> {
         require_date(row, "period_start", &label)?;
         require_date(row, "period_end", &label)?;
     }
+    let mut plan_task_keys = HashSet::new();
+    for (index, row) in data.plan_tasks.iter().enumerate() {
+        let label = format!("plan_tasks[{index}]");
+        let plan_id = require_id(row, "plan_id", &label)?;
+        let task_id = require_id(row, "task_id", &label)?;
+        require_reference(row, "plan_id", &ids.plans, &label, false)?;
+        require_reference(row, "task_id", &ids.tasks, &label, false)?;
+        let resolution = require_optional_string(row, "resolution", &label)?;
+        let resolved_at = require_optional_string(row, "resolved_at", &label)?;
+        match (resolution, resolved_at) {
+            (None, None) => {}
+            (Some(resolution), Some(_)) => {
+                if !["completed", "rolled_over", "backlog", "abandoned"].contains(&resolution.as_str()) {
+                    return Err(invalid(format!("{label} 的 resolution 不受支持")));
+                }
+            }
+            _ => return Err(invalid(format!("{label} 的 resolution 与 resolved_at 必须同时存在或为空"))),
+        }
+        if !plan_task_keys.insert((plan_id, task_id)) {
+            return Err(invalid("plan_tasks 中存在重复关联"));
+        }
+    }
 
     Ok(ids)
 }
@@ -572,6 +599,7 @@ async fn delete_current_data(transaction: &mut Transaction<'_, Sqlite>) -> Resul
     for table in [
         "taggables",
         "note_links",
+        "plan_tasks",
         "habit_logs",
         "checklist_items",
         "events",
@@ -617,6 +645,7 @@ fn record_counts(data: &BackupData) -> BTreeMap<String, usize> {
         ("taggables".to_string(), data.taggables.len()),
         ("reviews".to_string(), data.reviews.len()),
         ("plans".to_string(), data.plans.len()),
+        ("plan_tasks".to_string(), data.plan_tasks.len()),
     ])
 }
 
@@ -689,6 +718,13 @@ async fn restore_data(
     insert_rows(&mut transaction, "habit_logs", HABIT_LOGS_COLUMNS, &data.habit_logs).await?;
     insert_rows(&mut transaction, "note_links", NOTE_LINKS_COLUMNS, &data.note_links).await?;
     insert_rows(&mut transaction, "taggables", TAGGABLES_COLUMNS, &data.taggables).await?;
+    insert_rows(
+        &mut transaction,
+        "plan_tasks",
+        PLAN_TASKS_COLUMNS,
+        &data.plan_tasks,
+    )
+    .await?;
     transaction
         .commit()
         .await
@@ -706,13 +742,13 @@ mod tests {
           "format":"luluKing-backup",
           "formatVersion":1,
           "appVersion":"0.1.0",
-          "databaseVersion":4,
+          "databaseVersion":5,
           "exportedAt":"2026-08-13T08:00:00.000Z",
           "attachmentPolicy":"excluded",
           "data":{
             "tasks":[],"checklist_items":[],"events":[],"goals":[],"projects":[],"materials":[],
             "habits":[],"habit_logs":[],"subjects":[],"notes":[],"note_links":[],"tags":[],
-            "taggables":[],"reviews":[],"plans":[]
+            "taggables":[],"reviews":[],"plans":[],"plan_tasks":[]
           }
         }"#
         .to_string()
@@ -759,6 +795,10 @@ mod tests {
             .execute(&mut connection)
             .await
             .unwrap();
+        sqlx::raw_sql(include_str!("../migrations/005_plan_commitments.sql"))
+            .execute(&mut connection)
+            .await
+            .unwrap();
         connection
     }
 
@@ -784,6 +824,38 @@ mod tests {
 
             assert_eq!(result.get("subjects"), Some(&0));
             assert_eq!(subject_count, 0);
+        });
+    }
+
+    #[test]
+    fn restores_plan_task_relations_with_their_resolution() {
+        tauri::async_runtime::block_on(async {
+            let mut connection = memory_connection().await;
+            let raw = empty_backup()
+                .replace(
+                    "\"tasks\":[]",
+                    "\"tasks\":[{\"id\":1,\"title\":\"恢复承诺\",\"status\":\"todo\",\"plan_date\":null,\"due_date\":null,\"is_key\":0,\"project_id\":null,\"notes\":null,\"created_at\":\"2026-08-25 08:00:00\",\"updated_at\":\"2026-08-25 08:00:00\",\"deleted_at\":null,\"synced_at\":null}]",
+                )
+                .replace(
+                    "\"plans\":[]",
+                    "\"plans\":[{\"id\":1,\"type\":\"week\",\"period_start\":\"2026-08-24\",\"period_end\":\"2026-08-30\",\"content\":null,\"created_at\":\"2026-08-25 08:00:00\",\"updated_at\":\"2026-08-25 08:00:00\",\"deleted_at\":null,\"synced_at\":null}]",
+                )
+                .replace(
+                    "\"plan_tasks\":[]",
+                    "\"plan_tasks\":[{\"plan_id\":1,\"task_id\":1,\"resolution\":\"rolled_over\",\"resolved_at\":\"2026-08-25 09:00:00\"}]",
+                );
+            let document: BackupDocument = serde_json::from_str(&raw).unwrap();
+            validate_document(&document).unwrap();
+
+            restore_data(&mut connection, &document).await.unwrap();
+            let resolution: String = sqlx::query_scalar(
+                "SELECT resolution FROM plan_tasks WHERE plan_id = 1 AND task_id = 1",
+            )
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+
+            assert_eq!(resolution, "rolled_over");
         });
     }
 

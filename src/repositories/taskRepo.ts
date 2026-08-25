@@ -39,6 +39,11 @@ export async function getBacklogTasks(): Promise<Task[]> {
   return select<Task>(
     `SELECT * FROM tasks
      WHERE plan_date IS NULL AND status = 'todo' AND deleted_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM plan_tasks pt
+         JOIN plans p ON p.id = pt.plan_id
+         WHERE pt.task_id = tasks.id AND pt.resolution IS NULL AND p.deleted_at IS NULL
+       )
      ORDER BY is_key DESC, due_date ASC, created_at ASC`
   );
 }

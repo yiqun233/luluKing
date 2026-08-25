@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
-import { Trash2, RefreshCw, Sparkles, Square } from "lucide-react";
+import { Trash2, RefreshCw, Sparkles, Square, Check, RotateCcw, Undo2, Ban } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
+import { addDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from "date-fns";
 import {
   Dialog,
   DialogContent,
@@ -24,12 +24,27 @@ import { ConfirmDialog } from "@/components/feedback/ConfirmDialog";
 import { feedback } from "@/components/feedback/FeedbackProvider";
 import { useTagsFor, useSetTags } from "@/hooks/useTags";
 import { TagSelector } from "@/components/tags/TagSelector";
-import type { Review, ReviewType, ReviewStatus } from "@/types/entities";
+import { useResolvePlanTask, useReviewPlanTaskCommitments } from "@/hooks/usePlans";
+import type {
+  PlanTaskCommitment,
+  PlanTaskResolution,
+  Review,
+  ReviewType,
+  ReviewStatus,
+} from "@/types/entities";
 
 const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring";
 
 const fmt = (d: Date) => format(d, "yyyy-MM-dd");
+const EMPTY_COMMITMENTS: PlanTaskCommitment[] = [];
+
+const resolutionLabels: Record<PlanTaskResolution, string> = {
+  completed: "已完成",
+  rolled_over: "已顺延",
+  backlog: "已回待办池",
+  abandoned: "已放弃",
+};
 
 const QUESTION_TEMPLATE = `1. 本周什么做得好？
 
@@ -54,6 +69,7 @@ export function ReviewEditDialog({
   const createReview = useCreateReview();
   const updateReview = useUpdateReview();
   const deleteReview = useDeleteReview();
+  const resolvePlanTask = useResolvePlanTask();
   const { data: reviewTags } = useTagsFor("review", review?.id ?? null);
   const setTagsMutation = useSetTags();
 
@@ -71,6 +87,11 @@ export function ReviewEditDialog({
   const [tagIds, setTagIds] = useState<number[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
+  const { data: commitments = EMPTY_COMMITMENTS } = useReviewPlanTaskCommitments(
+    periodStart,
+    periodEnd,
+    open && !isCreate && type === "week"
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -161,7 +182,7 @@ export function ReviewEditDialog({
     }
   };
 
-  const handleRegenerate = async () => {
+  const refreshSummary = async () => {
     if (!periodStart || !periodEnd) return;
     setRegenerating(true);
     setDraftError("");
@@ -173,6 +194,38 @@ export function ReviewEditDialog({
     } finally {
       setRegenerating(false);
     }
+  };
+
+  const handleRegenerate = () => void refreshSummary();
+
+  const pendingCommitments = commitments.filter(
+    (commitment) => commitment.resolution === null && commitment.status === "todo"
+  );
+
+  const handleResolveCommitment = (
+    commitment: PlanTaskCommitment,
+    resolution: PlanTaskResolution
+  ) => {
+    const nextPeriodStart =
+      resolution === "rolled_over"
+        ? fmt(addDays(new Date(`${commitment.plan_period_end}T00:00:00`), 1))
+        : undefined;
+    resolvePlanTask.mutate(
+      {
+        plan_id: commitment.plan_id,
+        task_id: commitment.task_id,
+        resolution,
+        next_period_start: nextPeriodStart,
+      },
+      {
+        onSuccess: () => {
+          feedback.success(`已处理“${commitment.title}”：${resolutionLabels[resolution]}`);
+          void refreshSummary();
+        },
+        onError: (error) =>
+          feedback.error(error instanceof Error ? error.message : "承诺处理失败，请稍后重试"),
+      }
+    );
   };
 
   const handleSave = () => {
@@ -300,6 +353,85 @@ export function ReviewEditDialog({
               className="bg-muted/30 text-xs"
             />
           </div>
+
+          {!isCreate && type === "week" && (
+            <div className="space-y-2 rounded-md border bg-muted/20 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Label>周计划承诺</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    已完成 {commitments.filter((item) => item.resolution === "completed").length}/{commitments.length}
+                    {pendingCommitments.length > 0 && `，${pendingCommitments.length} 项待决`}
+                  </p>
+                </div>
+                <span className="text-xs text-muted-foreground">需手动确认去向</span>
+              </div>
+              {commitments.length === 0 ? (
+                <p className="text-xs text-muted-foreground">本周期还没有周计划承诺。</p>
+              ) : (
+                <div className="max-h-52 space-y-2 overflow-y-auto pr-1">
+                  {pendingCommitments.map((commitment) => {
+                    const nextPeriodStart = fmt(
+                      addDays(new Date(`${commitment.plan_period_end}T00:00:00`), 1)
+                    );
+                    return (
+                      <div key={`${commitment.plan_id}-${commitment.task_id}`} className="rounded border bg-background p-2">
+                        <p className="text-sm font-medium">{commitment.title}</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          <Button
+                            size="sm"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => handleResolveCommitment(commitment, "completed")}
+                            disabled={resolvePlanTask.isPending}
+                          >
+                            <Check className="h-3.5 w-3.5" />完成
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => handleResolveCommitment(commitment, "rolled_over")}
+                            disabled={resolvePlanTask.isPending}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />推到 {nextPeriodStart}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => handleResolveCommitment(commitment, "backlog")}
+                            disabled={resolvePlanTask.isPending}
+                          >
+                            <Undo2 className="h-3.5 w-3.5" />回待办池
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => handleResolveCommitment(commitment, "abandoned")}
+                            disabled={resolvePlanTask.isPending}
+                          >
+                            <Ban className="h-3.5 w-3.5" />放弃
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {commitments
+                    .filter((commitment) => commitment.resolution !== null)
+                    .map((commitment) => (
+                      <div
+                        key={`${commitment.plan_id}-${commitment.task_id}`}
+                        className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs text-muted-foreground"
+                      >
+                        <span className="flex-1 line-through">{commitment.title}</span>
+                        <span>{resolutionLabels[commitment.resolution!]}</span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 引导问题 / 内容 */}
           <div className="space-y-1.5">

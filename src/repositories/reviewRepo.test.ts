@@ -96,10 +96,11 @@ describe("deleteReview", () => {
 
 describe("generateReviewSummary", () => {
   it("聚合任务/收件箱/逾期/目标/习惯统计", async () => {
-    // selectOne 调用顺序（6 次）：doneTasks, totalTasks, prevDone, prevTotal, inboxCount, overdueCount
+    // selectOne 调用顺序（7 次）：完成、总数、待决、上期完成、上期总数、收件箱、逾期
     mockSelectOne
       .mockResolvedValueOnce({ c: 3 }) // doneTasks
       .mockResolvedValueOnce({ c: 5 }) // totalTasks
+      .mockResolvedValueOnce({ c: 2 }) // pendingCommitments
       .mockResolvedValueOnce({ c: 5 }) // prevDone
       .mockResolvedValueOnce({ c: 5 }) // prevTotal
       .mockResolvedValueOnce({ c: 8 }) // inbox
@@ -119,6 +120,7 @@ describe("generateReviewSummary", () => {
 
     expect(summary.doneTasks).toBe(3);
     expect(summary.totalTasks).toBe(5);
+    expect(summary.pendingCommitments).toBe(2);
     expect(summary.prevDoneTasks).toBe(5);
     expect(summary.prevTotalTasks).toBe(5);
     expect(summary.inboxCount).toBe(8);
@@ -154,6 +156,7 @@ describe("formatReviewSummary", () => {
     const text = formatReviewSummary({
       doneTasks: 3,
       totalTasks: 5,
+      pendingCommitments: 2,
       prevDoneTasks: 5,
       prevTotalTasks: 5,
       inboxCount: 8,
@@ -165,7 +168,7 @@ describe("formatReviewSummary", () => {
         { title: "冥想", count: 0, target: 7 },
       ],
     });
-    expect(text).toContain("完成 3/5（上期 5/5 ↓ 下降）");
+    expect(text).toContain("完成 3/5（上期 5/5 ↓ 下降），待决 2");
     expect(text).toContain("阅读 7/7 ✓");
     expect(text).toContain("运动 2/3 ⚠ 差 1 次");
     expect(text).toContain("冥想 0/7 ⚠ 本期零打卡");
@@ -178,6 +181,7 @@ describe("formatReviewSummary", () => {
     const text = formatReviewSummary({
       doneTasks: 0,
       totalTasks: 0,
+      pendingCommitments: 0,
       prevDoneTasks: 0,
       prevTotalTasks: 0,
       inboxCount: 0,
@@ -196,6 +200,7 @@ describe("formatReviewSummary", () => {
     const text = formatReviewSummary({
       doneTasks: 1,
       totalTasks: 2,
+      pendingCommitments: 0,
       prevDoneTasks: 0,
       prevTotalTasks: 0,
       inboxCount: 0,
@@ -211,6 +216,7 @@ describe("formatReviewSummary", () => {
     const text = formatReviewSummary({
       doneTasks: 0,
       totalTasks: 0,
+      pendingCommitments: 0,
       prevDoneTasks: 0,
       prevTotalTasks: 0,
       inboxCount: 0,

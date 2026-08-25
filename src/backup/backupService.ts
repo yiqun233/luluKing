@@ -12,7 +12,7 @@ import { select } from "@/db/client";
 
 export const BACKUP_FORMAT = "luluKing-backup";
 export const BACKUP_FORMAT_VERSION = 1;
-export const DATABASE_VERSION = 4;
+export const DATABASE_VERSION = 5;
 export const BACKUPS_DIR = "luluKing/backups";
 
 type BackupRow = Record<string, unknown>;
@@ -33,6 +33,7 @@ export interface BackupData {
   taggables: BackupRow[];
   reviews: BackupRow[];
   plans: BackupRow[];
+  plan_tasks: BackupRow[];
 }
 
 export interface BackupDocument {
@@ -76,6 +77,7 @@ const backupTables = [
   ["taggables", "tag_id, taggable_type, taggable_id"],
   ["reviews", "id"],
   ["plans", "id"],
+  ["plan_tasks", "plan_id, task_id"],
 ] as const satisfies readonly (readonly [keyof BackupData, string])[];
 
 const backupTableColumns: Record<keyof BackupData, readonly string[]> = {
@@ -94,6 +96,7 @@ const backupTableColumns: Record<keyof BackupData, readonly string[]> = {
   taggables: ["tag_id", "taggable_type", "taggable_id", "created_at", "synced_at"],
   reviews: ["id", "type", "period_start", "period_end", "auto_summary", "content", "status", "created_at", "updated_at", "deleted_at", "synced_at"],
   plans: ["id", "type", "period_start", "period_end", "content", "created_at", "updated_at", "deleted_at", "synced_at"],
+  plan_tasks: ["plan_id", "task_id", "resolution", "resolved_at"],
 };
 
 const requiredNumberFields: Partial<Record<keyof BackupData, readonly string[]>> = {
@@ -112,6 +115,7 @@ const requiredNumberFields: Partial<Record<keyof BackupData, readonly string[]>>
   taggables: ["tag_id", "taggable_id"],
   reviews: ["id"],
   plans: ["id"],
+  plan_tasks: ["plan_id", "task_id"],
 };
 
 const nullableNumberFields: Partial<Record<keyof BackupData, readonly string[]>> = {
@@ -173,7 +177,10 @@ function getRows(data: BackupData, table: keyof BackupData): BackupRow[] {
   return data[table];
 }
 
-function collectIds(data: BackupData, table: Exclude<keyof BackupData, "taggables">): Set<number> {
+function collectIds(
+  data: BackupData,
+  table: Exclude<keyof BackupData, "taggables" | "plan_tasks">
+): Set<number> {
   const ids = new Set<number>();
   for (const [index, row] of getRows(data, table).entries()) {
     const id = getNumber(row, "id", `${table}[${index}]`);
@@ -348,6 +355,28 @@ function validateBackupData(data: BackupData): void {
     requireDate(row, "period_start", label);
     requireDate(row, "period_end", label);
   }
+  const planTaskPairs = new Set<string>();
+  for (const [index, row] of data.plan_tasks.entries()) {
+    const label = `plan_tasks[${index}]`;
+    const planId = getNumber(row, "plan_id", label);
+    const taskId = getNumber(row, "task_id", label);
+    requireReference(row, "plan_id", ids.plans, label);
+    requireReference(row, "task_id", ids.tasks, label);
+    const resolution = getNullableString(row, "resolution", label);
+    const resolvedAt = getNullableString(row, "resolved_at", label);
+    if ((resolution === null) !== (resolvedAt === null)) {
+      throw new Error(`${label} 的 resolution 与 resolved_at 必须同时存在或为空`);
+    }
+    if (
+      resolution !== null &&
+      !["completed", "rolled_over", "backlog", "abandoned"].includes(resolution)
+    ) {
+      throw new Error(`${label} 的 resolution 不受支持`);
+    }
+    const key = `${planId}:${taskId}`;
+    if (planTaskPairs.has(key)) throw new Error("plan_tasks 中存在重复关联");
+    planTaskPairs.add(key);
+  }
 }
 
 function createFilename(exportedAt: string): string {
@@ -413,6 +442,15 @@ export function parseBackup(raw: string): BackupDocument {
     !isRecord(parsed.data)
   ) {
     throw new Error("备份文件缺少必要信息");
+  }
+
+  if (!Array.isArray(parsed.data.plan_tasks)) {
+    if (parsed.data.plan_tasks === undefined) {
+      // R1.4 之前的备份没有承诺表；按空数组兼容后再交给 Rust 原子恢复。
+      parsed.data.plan_tasks = [];
+    } else {
+      throw new Error("备份文件缺少 plan_tasks 数据");
+    }
   }
 
   for (const [table] of backupTables) {

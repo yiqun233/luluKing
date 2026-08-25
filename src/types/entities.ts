@@ -238,6 +238,26 @@ export interface Plan {
   synced_at: string | null;
 }
 
+/** 周计划中的任务承诺；空 resolution 表示仍需在复盘中处理。 */
+export type PlanTaskResolution =
+  | "completed"
+  | "rolled_over"
+  | "backlog"
+  | "abandoned";
+
+export interface PlanTask {
+  plan_id: number;
+  task_id: number;
+  resolution: PlanTaskResolution | null;
+  resolved_at: string | null;
+}
+
+/** 承诺关系与任务详情的联表结果。 */
+export interface PlanTaskCommitment extends Task, PlanTask {
+  plan_period_start: string;
+  plan_period_end: string;
+}
+
 // ========== 文件存储 ==========
 
 export interface FileRecord {

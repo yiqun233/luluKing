@@ -1,12 +1,14 @@
 mod backup_restore;
 mod note_links;
+mod plan_commitments;
 mod tag_management;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
 
 const MIGRATION_BASELINE_VERSION: i64 = 2;
 const SEARCH_INDEX_VERSION: i64 = 3;
-const DATABASE_VERSION: i64 = 4;
+const FULL_TEXT_SEARCH_VERSION: i64 = 4;
+const DATABASE_VERSION: i64 = 5;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -30,9 +32,15 @@ pub fn run() {
             kind: MigrationKind::Up,
         },
         Migration {
-            version: DATABASE_VERSION,
+            version: FULL_TEXT_SEARCH_VERSION,
             description: "add full text search index",
             sql: include_str!("../migrations/004_search_fts.sql"),
+            kind: MigrationKind::Up,
+        },
+        Migration {
+            version: DATABASE_VERSION,
+            description: "add weekly plan task commitments",
+            sql: include_str!("../migrations/005_plan_commitments.sql"),
             kind: MigrationKind::Up,
         },
     ];
@@ -41,6 +49,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             backup_restore::restore_backup,
             note_links::save_knowledge_note,
+            plan_commitments::resolve_plan_task,
+            plan_commitments::save_week_plan,
             tag_management::merge_tags
         ])
         .plugin(tauri_plugin_opener::init())
@@ -63,7 +73,7 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use super::{DATABASE_VERSION, MIGRATION_BASELINE_VERSION, SEARCH_INDEX_VERSION};
+    use super::{DATABASE_VERSION, FULL_TEXT_SEARCH_VERSION, MIGRATION_BASELINE_VERSION, SEARCH_INDEX_VERSION};
     use sqlx::{
         migrate::{Migration as SqlxMigration, MigrationType, Migrator},
         Connection, Row, SqliteConnection,
@@ -94,11 +104,18 @@ mod tests {
                     include_str!("../migrations/003_search_indexes.sql").into(),
                     false,
                 ),
-                DATABASE_VERSION => SqlxMigration::new(
-                    DATABASE_VERSION,
+                FULL_TEXT_SEARCH_VERSION => SqlxMigration::new(
+                    FULL_TEXT_SEARCH_VERSION,
                     "add full text search index".into(),
                     MigrationType::ReversibleUp,
                     include_str!("../migrations/004_search_fts.sql").into(),
+                    false,
+                ),
+                DATABASE_VERSION => SqlxMigration::new(
+                    DATABASE_VERSION,
+                    "add weekly plan task commitments".into(),
+                    MigrationType::ReversibleUp,
+                    include_str!("../migrations/005_plan_commitments.sql").into(),
                     false,
                 ),
                 _ => unreachable!("测试中不应出现未登记的迁移版本"),
@@ -130,6 +147,7 @@ mod tests {
                 1,
                 MIGRATION_BASELINE_VERSION,
                 SEARCH_INDEX_VERSION,
+                FULL_TEXT_SEARCH_VERSION,
                 DATABASE_VERSION,
             ])
             .run_direct(&mut connection)
@@ -210,6 +228,7 @@ mod tests {
                 1,
                 MIGRATION_BASELINE_VERSION,
                 SEARCH_INDEX_VERSION,
+                FULL_TEXT_SEARCH_VERSION,
                 DATABASE_VERSION,
             ])
             .run_direct(&mut connection)

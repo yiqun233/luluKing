@@ -24,8 +24,12 @@ export interface UpdateReviewInput {
 }
 
 export interface ReviewSummary {
+  /** 同周期周计划中的承诺任务完成数 */
   doneTasks: number;
+  /** 同周期周计划中的承诺总数 */
   totalTasks: number;
+  /** 尚未完成且尚未做去向决策的承诺数 */
+  pendingCommitments: number;
   /** 上一个等长周期的完成数，用于环比 */
   prevDoneTasks: number;
   prevTotalTasks: number;
@@ -166,24 +170,52 @@ export async function generateReviewSummary(
   periodEnd: string
 ): Promise<ReviewSummary> {
   const doneTasks = await selectOne<{ c: number }>(
-    `SELECT COUNT(*) as c FROM tasks
-     WHERE plan_date BETWEEN ? AND ? AND status = 'done' AND deleted_at IS NULL`,
+    `SELECT COUNT(*) as c
+     FROM plan_tasks pt
+     JOIN plans p ON p.id = pt.plan_id
+     JOIN tasks t ON t.id = pt.task_id
+     WHERE p.type = 'week' AND p.period_start = ? AND p.period_end = ?
+       AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+       AND (t.status = 'done' OR pt.resolution = 'completed')`,
     [periodStart, periodEnd]
   );
   const totalTasks = await selectOne<{ c: number }>(
-    `SELECT COUNT(*) as c FROM tasks
-     WHERE plan_date BETWEEN ? AND ? AND status != 'abandoned' AND deleted_at IS NULL`,
+    `SELECT COUNT(*) as c
+     FROM plan_tasks pt
+     JOIN plans p ON p.id = pt.plan_id
+     JOIN tasks t ON t.id = pt.task_id
+     WHERE p.type = 'week' AND p.period_start = ? AND p.period_end = ?
+       AND p.deleted_at IS NULL AND t.deleted_at IS NULL`,
+    [periodStart, periodEnd]
+  );
+  const pendingCommitments = await selectOne<{ c: number }>(
+    `SELECT COUNT(*) as c
+     FROM plan_tasks pt
+     JOIN plans p ON p.id = pt.plan_id
+     JOIN tasks t ON t.id = pt.task_id
+     WHERE p.type = 'week' AND p.period_start = ? AND p.period_end = ?
+       AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+       AND pt.resolution IS NULL AND t.status = 'todo'`,
     [periodStart, periodEnd]
   );
   const prev = prevPeriod(periodStart, periodEnd);
   const prevDoneTasks = await selectOne<{ c: number }>(
-    `SELECT COUNT(*) as c FROM tasks
-     WHERE plan_date BETWEEN ? AND ? AND status = 'done' AND deleted_at IS NULL`,
+    `SELECT COUNT(*) as c
+     FROM plan_tasks pt
+     JOIN plans p ON p.id = pt.plan_id
+     JOIN tasks t ON t.id = pt.task_id
+     WHERE p.type = 'week' AND p.period_start = ? AND p.period_end = ?
+       AND p.deleted_at IS NULL AND t.deleted_at IS NULL
+       AND (t.status = 'done' OR pt.resolution = 'completed')`,
     [prev.start, prev.end]
   );
   const prevTotalTasks = await selectOne<{ c: number }>(
-    `SELECT COUNT(*) as c FROM tasks
-     WHERE plan_date BETWEEN ? AND ? AND status != 'abandoned' AND deleted_at IS NULL`,
+    `SELECT COUNT(*) as c
+     FROM plan_tasks pt
+     JOIN plans p ON p.id = pt.plan_id
+     JOIN tasks t ON t.id = pt.task_id
+     WHERE p.type = 'week' AND p.period_start = ? AND p.period_end = ?
+       AND p.deleted_at IS NULL AND t.deleted_at IS NULL`,
     [prev.start, prev.end]
   );
   const inboxCount = await selectOne<{ c: number }>(
@@ -228,6 +260,7 @@ export async function generateReviewSummary(
   return {
     doneTasks: doneTasks?.c ?? 0,
     totalTasks: totalTasks?.c ?? 0,
+    pendingCommitments: pendingCommitments?.c ?? 0,
     prevDoneTasks: prevDoneTasks?.c ?? 0,
     prevTotalTasks: prevTotalTasks?.c ?? 0,
     inboxCount: inboxCount?.c ?? 0,
@@ -250,7 +283,7 @@ export function formatReviewSummary(s: ReviewSummary): string {
   // 任务：本期 vs 上期完成率
   const cur = rate(s.doneTasks, s.totalTasks);
   const prev = rate(s.prevDoneTasks, s.prevTotalTasks);
-  let taskLine = `任务：完成 ${s.doneTasks}/${s.totalTasks}`;
+  let taskLine = `周计划承诺：完成 ${s.doneTasks}/${s.totalTasks}`;
   if (s.prevTotalTasks > 0) {
     taskLine += `（上期 ${s.prevDoneTasks}/${s.prevTotalTasks}`;
     if (cur != null && prev != null) {
@@ -260,6 +293,7 @@ export function formatReviewSummary(s: ReviewSummary): string {
     }
     taskLine += "）";
   }
+  if (s.pendingCommitments > 0) taskLine += `，待决 ${s.pendingCommitments}`;
 
   const lines: string[] = [taskLine];
 
