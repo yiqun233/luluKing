@@ -15,6 +15,7 @@ import {
   Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { preloadRoute } from "@/lib/pageLoaders";
 
 interface NavItem {
   to: string;
@@ -110,6 +111,8 @@ export function Sidebar() {
                   key={item.to}
                   to={item.to}
                   end={item.to === "/"}
+                  onMouseEnter={() => preloadRoute(item.to)}
+                  onFocus={() => preloadRoute(item.to)}
                   className={({ isActive }) =>
                     cn(
                       "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
@@ -137,6 +140,8 @@ export function Sidebar() {
       <div className="border-t px-3 py-2">
         <NavLink
           to={SETTINGS_NAV.to}
+          onMouseEnter={() => preloadRoute(SETTINGS_NAV.to)}
+          onFocus={() => preloadRoute(SETTINGS_NAV.to)}
           className={({ isActive }) =>
             cn(
               "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",

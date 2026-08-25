@@ -1,27 +1,68 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window",
+  "description": "最小权限：本地数据库、设置、受限应用数据目录及 HTTPS AI 请求",
   "windows": ["main"],
   "permissions": [
-    "core:default",
-    "opener:default",
-    "sql:default",
+    "core:app:allow-version",
+    "sql:allow-load",
     "sql:allow-execute",
     "sql:allow-select",
-    "store:default",
+    "store:allow-load",
+    "store:allow-get-store",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
     {
       "identifier": "http:default",
+      "allow": [{ "url": "https://*" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
       "allow": [
-        { "url": "https://**" }
+        { "path": "$APPDATA/luluKing" },
+        { "path": "$APPDATA/luluKing/**" },
+        { "path": "$APPDATA/files" },
+        { "path": "$APPDATA/files/**" }
       ]
     },
     {
-      "identifier": "fs:default",
+      "identifier": "fs:allow-mkdir",
       "allow": [
-        { "path": "$APPDATA/*" },
-        { "path": "$APPDATA" }
+        { "path": "$APPDATA/luluKing" },
+        { "path": "$APPDATA/luluKing/**" }
       ]
-    }
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$APPDATA/luluKing/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPDATA/luluKing/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA/luluKing/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [
+        { "path": "$APPDATA/luluKing/files/**" },
+        { "path": "$APPDATA/files/**" }
+      ]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$APPDATA/luluKing/files/**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [
+        { "path": "$APPDATA/luluKing/files/**" },
+        { "path": "$APPDATA/files/**" }
+      ]
+    },
+    "fs:deny-default"
   ]
 }

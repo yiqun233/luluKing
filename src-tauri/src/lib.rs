@@ -53,7 +53,6 @@ pub fn run() {
             plan_commitments::save_week_plan,
             tag_management::merge_tags
         ])
-        .plugin(tauri_plugin_opener::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:app.db", migrations)

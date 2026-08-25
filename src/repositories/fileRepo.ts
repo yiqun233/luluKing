@@ -29,7 +29,7 @@ export async function saveFile(
 ): Promise<FileRecord> {
   // 生成唯一存储文件名：时间戳-原始名
   const storedName = `${Date.now()}-${filename}`;
-  const relativePath = `files/${storedName}`;
+  const relativePath = `luluKing/files/${storedName}`;
 
   // 写文件到磁盘
   await writeFile(relativePath, new Uint8Array(data), { baseDir: BaseDirectory.AppData });

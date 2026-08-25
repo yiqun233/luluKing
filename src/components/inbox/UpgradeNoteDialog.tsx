@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useUpdateNote } from "@/hooks/useNotes";
 import { useSubjects } from "@/hooks/useSubjects";
+import { feedback } from "@/components/feedback/FeedbackProvider";
 import type { Note } from "@/types/entities";
 
 const selectClass =
@@ -43,15 +44,22 @@ export function UpgradeNoteDialog({
 
   const handleSave = () => {
     if (!note) return;
-    updateNote.mutate({
-      id: note.id,
-      input: {
-        status: "knowledge",
-        title: title.trim() || null,
-        subject_id: subjectId ? Number(subjectId) : null,
+    updateNote.mutate(
+      {
+        id: note.id,
+        input: {
+          status: "knowledge",
+          title: title.trim() || null,
+          subject_id: subjectId ? Number(subjectId) : null,
+        },
       },
-    });
-    onOpenChange(false);
+      {
+        onSuccess: () => {
+          feedback.success("已升级为知识");
+          onOpenChange(false);
+        },
+      }
+    );
   };
 
   return (

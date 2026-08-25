@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTaskDialog } from "@/components/tasks/TaskDialogProvider";
+import { preloadRoute } from "@/lib/pageLoaders";
 
 // 数字键 1-9 对应的侧栏路由顺序
 const ROUTES = [
@@ -39,6 +40,7 @@ export function useGlobalShortcuts() {
       if (key >= "1" && key <= "9") {
         const idx = Number(key) - 1;
         if (idx < ROUTES.length) {
+          preloadRoute(ROUTES[idx]);
           navigate(ROUTES[idx]);
           e.preventDefault();
         }
@@ -46,6 +48,7 @@ export function useGlobalShortcuts() {
         openCreate();
         e.preventDefault();
       } else if (key === "/") {
+        preloadRoute("/search");
         navigate("/search");
         e.preventDefault();
       }

@@ -36,7 +36,7 @@ export function TaskItem({
     <div
       onContextMenu={(e) => onContextMenu?.(e, task)}
       className={cn(
-        "group flex items-center gap-3 rounded-md border bg-card px-3 py-2 transition-colors hover:bg-accent/40",
+        "deferred-list-item group flex items-center gap-3 rounded-md border bg-card px-3 py-2 transition-colors hover:bg-accent/40",
         task.is_key === 1 &&
           "border-amber-400/50 bg-amber-50/30 dark:bg-amber-950/10",
         selected && "border-primary bg-primary/5 ring-1 ring-primary/40"

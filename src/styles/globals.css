@@ -123,6 +123,12 @@
   }
 }
 
+/* 长列表滚动时跳过视口外项目的布局与绘制，保留近似高度避免滚动条跳动。 */
+.deferred-list-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 3.5rem;
+}
+
 /* 滚动条样式 */
 ::-webkit-scrollbar {
   width: 6px;

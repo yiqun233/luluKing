@@ -98,8 +98,8 @@ export function SettingsPage() {
       setSavedMsg("已保存");
       setTimeout(() => setSavedMsg(""), 2000);
       feedback.success("AI 配置已保存");
-    } catch {
-      setSaveError("保存失败，请检查配置后重试");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "保存失败，请检查配置后重试");
     } finally {
       setSaving(false);
     }
@@ -202,7 +202,7 @@ export function SettingsPage() {
             <div>
               <h2 className="text-sm font-semibold">AI 配置</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                用于复盘草稿生成等 AI 功能。兼容 OpenAI 接口格式（OpenAI / Claude 兼容接口 / 国内模型等）。
+                用于复盘草稿生成等 AI 功能。仅接受 HTTPS 标准端口 443 的 OpenAI 兼容接口；本地模型和 HTTP 服务当前不支持。
               </p>
             </div>
 

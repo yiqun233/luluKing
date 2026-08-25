@@ -1,12 +1,18 @@
 import {
   createContext,
+  lazy,
+  Suspense,
   useCallback,
   useContext,
   useState,
   type ReactNode,
 } from "react";
-import { TaskEditDialog } from "./TaskEditDialog";
 import type { Task } from "@/types/entities";
+
+const loadTaskEditDialog = () => import("./TaskEditDialog");
+const TaskEditDialog = lazy(() =>
+  loadTaskEditDialog().then(({ TaskEditDialog }) => ({ default: TaskEditDialog }))
+);
 
 interface TaskDialogValue {
   /** 打开新建任务弹窗，可预填项目 */
@@ -35,12 +41,14 @@ export function TaskDialogProvider({ children }: { children: ReactNode }) {
   const [presetProjectId, setPresetProjectId] = useState<number | undefined>();
 
   const openCreate = useCallback((pid?: number) => {
+    void loadTaskEditDialog();
     setTask(null);
     setPresetProjectId(pid);
     setOpen(true);
   }, []);
 
   const openEdit = useCallback((t: Task) => {
+    void loadTaskEditDialog();
     setTask(t);
     setPresetProjectId(undefined);
     setOpen(true);
@@ -49,12 +57,16 @@ export function TaskDialogProvider({ children }: { children: ReactNode }) {
   return (
     <TaskDialogContext.Provider value={{ openCreate, openEdit }}>
       {children}
-      <TaskEditDialog
-        task={task}
-        presetProjectId={presetProjectId}
-        open={open}
-        onOpenChange={setOpen}
-      />
+      {open && (
+        <Suspense fallback={null}>
+          <TaskEditDialog
+            task={task}
+            presetProjectId={presetProjectId}
+            open={open}
+            onOpenChange={setOpen}
+          />
+        </Suspense>
+      )}
     </TaskDialogContext.Provider>
   );
 }

@@ -138,7 +138,7 @@ export function KnowledgePage() {
                 <button
                   key={note.id}
                   onClick={() => openEdit(note)}
-                  className="block w-full rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-accent/40"
+                  className="deferred-list-item block w-full rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-accent/40"
                 >
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />

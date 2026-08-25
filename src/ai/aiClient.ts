@@ -3,6 +3,7 @@ import { LazyStore } from "@tauri-apps/plugin-store";
 
 const store = new LazyStore("settings.json");
 const AI_REQUEST_TIMEOUT = 30_000;
+const DEFAULT_AI_BASE_URL = "https://api.openai.com/v1";
 
 // ============================================================
 // AI 调用层
@@ -40,7 +41,38 @@ export function getAIErrorMessage(error: unknown): string {
   if (message.includes("响应超时")) {
     return "AI 服务响应超时，请稍后重试";
   }
+  if (message.includes("AI 服务地址")) {
+    return message;
+  }
   return "AI 服务暂时不可用，请检查网络和配置后重试";
+}
+
+/**
+ * 只允许标准 HTTPS 端点。Tauri capability 同样限制为 HTTPS 默认端口，
+ * 避免配置页被用作访问本机服务或任意明文 HTTP 地址的跳板。
+ */
+export function normalizeAIBaseUrl(value: string): string {
+  const raw = value.trim();
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("AI 服务地址格式不正确");
+  }
+  if (url.protocol !== "https:") {
+    throw new Error("AI 服务地址必须使用 HTTPS，暂不支持本地或 HTTP 服务");
+  }
+  if (["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)) {
+    throw new Error("AI 服务地址暂不支持本地服务");
+  }
+  if (url.port && url.port !== "443") {
+    throw new Error("AI 服务地址只能使用 HTTPS 标准端口 443");
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    throw new Error("AI 服务地址不能包含账号、查询参数或片段");
+  }
+  const pathname = url.pathname.replace(/\/+$/, "");
+  return `${url.origin}${pathname}`;
 }
 
 /**
@@ -51,7 +83,7 @@ export async function getAIConfig(): Promise<AIConfig | null> {
   if (!apiKey) return null;
   return {
     apiKey,
-    baseUrl: (await store.get<string>("ai_baseUrl")) || "https://api.openai.com/v1",
+    baseUrl: (await store.get<string>("ai_baseUrl")) || DEFAULT_AI_BASE_URL,
     model: (await store.get<string>("ai_model")) || "gpt-4o",
   };
 }
@@ -60,8 +92,10 @@ export async function getAIConfig(): Promise<AIConfig | null> {
  * 保存 AI 配置
  */
 export async function saveAIConfig(config: Partial<AIConfig>): Promise<void> {
+  const baseUrl =
+    config.baseUrl !== undefined ? normalizeAIBaseUrl(config.baseUrl) : undefined;
   if (config.apiKey !== undefined) await store.set("ai_apiKey", config.apiKey);
-  if (config.baseUrl !== undefined) await store.set("ai_baseUrl", config.baseUrl);
+  if (baseUrl !== undefined) await store.set("ai_baseUrl", baseUrl);
   if (config.model !== undefined) await store.set("ai_model", config.model);
   await store.save();
 }
@@ -80,6 +114,8 @@ export async function callAI(
   if (!config) {
     throw new Error("AI 未配置，请先在设置中填写 API Key");
   }
+  const baseUrl = normalizeAIBaseUrl(config.baseUrl);
+  const endpoint = new URL("chat/completions", `${baseUrl}/`).toString();
 
   const messages = [
     ...(options.systemPrompt
@@ -99,7 +135,7 @@ export async function callAI(
   );
 
   try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${config.apiKey}`,
